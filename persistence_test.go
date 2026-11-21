@@ -85,11 +85,13 @@ func TestSQLiteGameRecovery(t *testing.T) {
 				return data
 			}
 			var before map[string]any
+			var cast map[string]any
 			var actor string
 			if game == "abracada" {
 				actor = started["turn"].(string)
-				cast := action(actor, started)
+				cast = action(actor, started)
 				cast["spell"] = 1
+				cast["requestId"] = "123456789012345678901234567890ab"
 				before = request("POST", "cast", cast, 200)
 				if before["game"].(map[string]any)["phase"] != "rolling" {
 					t.Fatal("expected pending dragon roll")
@@ -121,11 +123,25 @@ func TestSQLiteGameRecovery(t *testing.T) {
 			request("GET", "room", wrong, 403)
 			state := after["game"].(map[string]any)
 			if game == "abracada" {
+				replayed := request("POST", "cast", cast, 200)
+				if !reflect.DeepEqual(before, replayed) {
+					t.Fatal("replayed cast did not return its original response after restart")
+				}
+				cast["spell"] = 2
+				request("POST", "cast", cast, 409)
+				if current := request("GET", "room", credentials(actor), 200); !reflect.DeepEqual(after, current) {
+					t.Fatal("replayed cast changed the room")
+				}
 				roll := action(actor, state)
 				roll["roll"] = 2
-				resolved := request("POST", "roll", roll, 200)["game"].(map[string]any)
+				roll["requestId"] = "123456789012345678901234567890cd"
+				firstRoll := request("POST", "roll", roll, 200)
+				resolved := firstRoll["game"].(map[string]any)
 				if resolved["phase"] == "rolling" {
 					t.Fatal("restored dragon roll did not resolve")
+				}
+				if replayed := request("POST", "roll", roll, 200); !reflect.DeepEqual(firstRoll, replayed) {
+					t.Fatal("replayed roll did not return the original response")
 				}
 			} else {
 				if got := request("GET", "private", credentials(actor), 200); !reflect.DeepEqual(private, got) {

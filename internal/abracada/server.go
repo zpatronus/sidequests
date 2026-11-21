@@ -21,17 +21,19 @@ var assets embed.FS
 const roomIdleTTL = 15 * time.Minute
 
 type room struct {
-	Pins          roomdb.Pins
-	activityDirty bool
-	Code, Host    string
-	Members       []member
-	Tokens        map[string]string
-	Bots          int
-	Game          *game
-	Active        time.Time
-	listeners     map[chan struct{}]struct{}
-	worker        bool
-	reactions     map[chan reaction]struct{}
+	Pins           roomdb.Pins
+	ActionReceipts []actionReceipt
+	activityDirty  bool
+	Code, Host     string
+	Members        []member
+	Tokens         map[string]string
+	Bots           int
+	LobbyVersion   int
+	Game           *game
+	Active         time.Time
+	listeners      map[chan struct{}]struct{}
+	worker         bool
+	reactions      map[chan reaction]struct{}
 }
 type server struct {
 	pinAuth bool
@@ -42,16 +44,17 @@ type server struct {
 	now     func() time.Time
 }
 type roomView struct {
-	Code    string    `json:"code"`
-	Host    string    `json:"host"`
-	You     string    `json:"you"`
-	Members []member  `json:"members"`
-	Bots    int       `json:"bots"`
-	Game    *gameView `json:"game,omitempty"`
+	Code         string    `json:"code"`
+	Host         string    `json:"host"`
+	You          string    `json:"you"`
+	Members      []member  `json:"members"`
+	Bots         int       `json:"bots"`
+	LobbyVersion int       `json:"lobbyVersion"`
+	Game         *gameView `json:"game,omitempty"`
 }
 
 func (r *room) view(id string) roomView {
-	v := roomView{Code: r.Code, Host: r.Host, You: id, Members: append([]member(nil), r.Members...), Bots: r.Bots}
+	v := roomView{Code: r.Code, Host: r.Host, You: id, Members: append([]member(nil), r.Members...), Bots: r.Bots, LobbyVersion: r.LobbyVersion}
 	if r.Game != nil {
 		v.Game = r.Game.view(id)
 	}
@@ -119,18 +122,20 @@ func (s *server) clean() {
 }
 
 type request struct {
-	Username string `json:"username"`
-	PIN      string `json:"pin"`
-	NewPIN   string `json:"newPin"`
-	Code     string `json:"code"`
-	Name     string `json:"name"`
-	Game     string `json:"game"`
-	Step     int    `json:"step"`
-	Spell    int    `json:"spell"`
-	Slot     int    `json:"slot"`
-	Count    int    `json:"count"`
-	Emoji    string `json:"emoji"`
-	Roll     int    `json:"roll"`
+	RequestID    string `json:"requestId"`
+	LobbyVersion *int   `json:"lobbyVersion"`
+	Username     string `json:"username"`
+	PIN          string `json:"pin"`
+	NewPIN       string `json:"newPin"`
+	Code         string `json:"code"`
+	Name         string `json:"name"`
+	Game         string `json:"game"`
+	Step         int    `json:"step"`
+	Spell        int    `json:"spell"`
+	Slot         int    `json:"slot"`
+	Count        int    `json:"count"`
+	Emoji        string `json:"emoji"`
+	Roll         int    `json:"roll"`
 }
 
 func (s *server) api(w http.ResponseWriter, q *http.Request) {
@@ -310,6 +315,7 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 			r.Host = id
 		}
 		r.Bots = min(r.Bots, 6-len(r.Members))
+		r.LobbyVersion++
 		r.Active = s.now()
 		r.notify()
 		if !s.pinAuth {
@@ -339,6 +345,31 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 		}
 		return
 	}
+	var requestKey actionKey
+	if in.RequestID != "" && isRepeatableAction(action) {
+		if !validRequestID(in.RequestID) {
+			fail(w, 400, "请求编号无效")
+			return
+		}
+		requestKey = in.actionKey(action)
+		for _, receipt := range r.ActionReceipts {
+			if receipt.Player != id || receipt.ID != in.RequestID {
+				continue
+			}
+			if receipt.Action != requestKey {
+				fail(w, 409, "请求编号已用于其他操作")
+				return
+			}
+			respond(w, 200, receipt.Result)
+			return
+		}
+	}
+	if (action == "start" || action == "bots") &&
+		((in.LobbyVersion != nil && *in.LobbyVersion != r.LobbyVersion) ||
+			(in.RequestID != "" && in.LobbyVersion == nil)) {
+		fail(w, 409, "等待室状态已更新，请重试")
+		return
+	}
 	if action != "react" {
 		defer r.notify()
 	}
@@ -361,6 +392,7 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 			return
 		}
 		r.Bots = in.Count
+		r.LobbyVersion++
 	case "start":
 		if id != r.Host || r.Game != nil {
 			fail(w, 403, "只有房主可以开始游戏")
@@ -384,6 +416,7 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 			return
 		}
 		r.Game = g
+		r.LobbyVersion++
 	case "next":
 		if id != r.Host || r.Game == nil || in.Game != r.Game.ID || in.Step != r.Game.Step || r.Game.Phase != "round-end" {
 			fail(w, 409, "等待房主开始下一轮")
@@ -396,12 +429,14 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 			return
 		}
 		r.Game = nil
+		r.LobbyVersion++
 	case "leave":
 		if r.Game != nil && r.Game.Phase != "finished" {
 			fail(w, 409, "游戏中会保留席位，可用用户名和 PIN 重新连接")
 			return
 		}
 		r.Members = append(r.Members[:index], r.Members[index+1:]...)
+		r.LobbyVersion++
 		for key, owner := range r.Tokens {
 			if owner == id {
 				delete(r.Tokens, key)
@@ -439,7 +474,11 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 		return
 	}
 	s.runBots(r)
-	respond(w, 200, r.view(id))
+	result := r.view(id)
+	if requestKey.Action != "" {
+		r.rememberAction(id, in.RequestID, requestKey, result)
+	}
+	respond(w, 200, result)
 }
 func fmtBot(i int) string {
 	return []string{"星尘学徒", "苔藓术士", "月光使者", "迷雾巫师", "琥珀法师"}[i]
