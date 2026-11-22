@@ -26,7 +26,16 @@ type systemMemory struct {
 }
 
 type snapshot struct {
-	SampledAt     time.Time     `json:"sampledAt"`
+	SampledAt     time.Time `json:"sampledAt"`
+	CPUModel      string    `json:"cpuModel"`
+	OS            string    `json:"os"`
+	OSRelease     string    `json:"osRelease"`
+	Kernel        string    `json:"kernel"`
+	Architecture  string    `json:"architecture"`
+	GoVersion     string    `json:"goVersion"`
+	ResidentKiB   *uint64   `json:"residentKiB"`
+	ProcessCPU    *float64  `json:"processCPU"`
+	cpuTime       *time.Duration
 	CPUs          int           `json:"cpus"`
 	Load          *[3]float64   `json:"load"`
 	Memory        *systemMemory `json:"memory"`
@@ -41,6 +50,7 @@ func Register(mux *http.ServeMux) {
 	static := http.FileServer(http.FS(files))
 	var mu sync.Mutex
 	var latest snapshot
+	cpuModel, osRelease, kernel := systemIdentity()
 	mux.HandleFunc("GET /dashboard", dashboardHeaders(func(w http.ResponseWriter, r *http.Request) {
 		page, _ := assets.ReadFile("web/index.html")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -52,7 +62,10 @@ func Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /dashboard/metrics", dashboardHeaders(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		if time.Since(latest.SampledAt) >= 5*time.Second {
-			latest = collect("/proc")
+			next := collect("/proc")
+			next.CPUModel, next.OSRelease, next.Kernel = cpuModel, osRelease, kernel
+			next.ProcessCPU = cpuPercent(latest, next)
+			latest = next
 		}
 		data := latest
 		mu.Unlock()
@@ -75,8 +88,14 @@ func dashboardHeaders(next http.HandlerFunc) http.HandlerFunc {
 func collect(procDir string) snapshot {
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
+	cpuTime := processCPUTime()
 	return snapshot{
-		SampledAt:     time.Now().UTC(),
+		SampledAt:     time.Now(),
+		OS:            runtime.GOOS,
+		Architecture:  runtime.GOARCH,
+		GoVersion:     runtime.Version(),
+		ResidentKiB:   readResidentMemory(procFields(filepath.Join(procDir, "self", "status"))),
+		cpuTime:       cpuTime,
 		CPUs:          runtime.NumCPU(),
 		Load:          loadAverage(procFields(filepath.Join(procDir, "loadavg"))),
 		Memory:        readMemory(procFields(filepath.Join(procDir, "meminfo"))),
@@ -143,4 +162,59 @@ func readMemory(fields []string) *systemMemory {
 		return nil
 	}
 	return &systemMemory{TotalKiB: total, AvailableKiB: available}
+}
+
+func cpuPercent(previous, current snapshot) *float64 {
+	if previous.cpuTime == nil || current.cpuTime == nil {
+		return nil
+	}
+	elapsed := current.SampledAt.Sub(previous.SampledAt)
+	used := *current.cpuTime - *previous.cpuTime
+	if elapsed <= 0 || used < 0 {
+		return nil
+	}
+	percent := 100 * float64(used) / float64(elapsed)
+	return &percent
+}
+
+func readResidentMemory(fields []string) *uint64 {
+	for i := 0; i+2 < len(fields); i++ {
+		if fields[i] == "VmRSS:" && fields[i+2] == "kB" {
+			if value, err := strconv.ParseUint(fields[i+1], 10, 64); err == nil {
+				return &value
+			}
+		}
+	}
+	return nil
+}
+
+func systemIdentity() (cpuModel, osRelease, kernel string) {
+	kernel = strings.Join(procFields("/proc/sys/kernel/osrelease"), " ")
+	cpu, _ := os.ReadFile("/proc/cpuinfo")
+	for _, key := range []string{"model name", "Hardware", "Processor"} {
+		cpuModel = entryValue(string(cpu), key, ":")
+		if cpuModel != "" {
+			break
+		}
+	}
+	for _, path := range []string{"/etc/os-release", "/usr/lib/os-release"} {
+		data, err := os.ReadFile(path)
+		if err == nil {
+			osRelease = strings.Trim(entryValue(string(data), "PRETTY_NAME", "="), "\"'")
+			if osRelease != "" {
+				break
+			}
+		}
+	}
+	return cpuModel, osRelease, kernel
+}
+
+func entryValue(data, key, separator string) string {
+	for _, line := range strings.Split(data, "\n") {
+		name, value, ok := strings.Cut(line, separator)
+		if ok && strings.TrimSpace(name) == key {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCollectReturnsAvailableMetrics(t *testing.T) {
@@ -48,5 +49,28 @@ func TestDashboardRoutes(t *testing.T) {
 				t.Fatalf("invalid metrics: %s (%v)", w.Body, err)
 			}
 		}
+	}
+}
+
+func TestProcessCPUUsesElapsedTimeAcrossCores(t *testing.T) {
+	now := time.Now()
+	firstCPU, secondCPU := time.Second, 7*time.Second
+	first := snapshot{SampledAt: now, cpuTime: &firstCPU}
+	second := snapshot{SampledAt: now.Add(5 * time.Second), cpuTime: &secondCPU}
+	if percent := cpuPercent(first, second); percent == nil || *percent != 120 {
+		t.Fatalf("expected 120%% CPU, got %v", percent)
+	}
+	if cpuPercent(snapshot{}, first) != nil || cpuPercent(second, first) != nil {
+		t.Fatal("a missing baseline or reversed sample should be unavailable")
+	}
+}
+
+func TestResidentMemoryHandlesMissingAndInvalidData(t *testing.T) {
+	rss := readResidentMemory(strings.Fields("Name: sidequests VmRSS: 45056 kB"))
+	if rss == nil || *rss != 45056 {
+		t.Fatalf("expected 45056 KiB, got %v", rss)
+	}
+	if readResidentMemory(nil) != nil || readResidentMemory(strings.Fields("VmRSS: invalid kB")) != nil {
+		t.Fatal("missing and invalid RSS should be unavailable")
 	}
 }
