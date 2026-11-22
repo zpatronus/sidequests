@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Machine dashboard · Sidequests</title>
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="stylesheet" href="/dashboard/dashboard.css">
+  <script src="/dashboard/dashboard.js" defer></script>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Machine dashboard</h1>
+      <p id="status" role="status">Loading metrics…</p>
+    </header>
+    <section>
+      <h2>System</h2>
+      <dl>
+        <div><dt>Logical CPUs visible to Go</dt><dd id="cpus">—</dd></div>
+        <div><dt>Load average · 1 / 5 / 15 min</dt><dd id="load">—</dd></div>
+        <div><dt>Memory available / total</dt><dd id="memory">—</dd></div>
+        <div><dt>System uptime</dt><dd id="systemUptime">—</dd></div>
+      </dl>
+    </section>
+    <section>
+      <h2>Sidequests process</h2>
+      <dl>
+        <div><dt>Process uptime</dt><dd id="processUptime">—</dd></div>
+        <div><dt>Go heap</dt><dd id="heapBytes">—</dd></div>
+        <div><dt>Goroutines</dt><dd id="goroutines">—</dd></div>
+      </dl>
+    </section>
+  </main>
+</body>
+</html>

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/zpatronus/sidequests/internal/abracada"
+	"github.com/zpatronus/sidequests/internal/dashboard"
 	"github.com/zpatronus/sidequests/internal/formulawar"
 	"github.com/zpatronus/sidequests/internal/identity"
 	"github.com/zpatronus/sidequests/internal/offercall"
@@ -44,6 +45,7 @@ func persistentHandler(ctx context.Context, db *roomdb.Store) (http.Handler, err
 
 func mountGames(magic, hitler http.Handler) http.Handler {
 	mux := http.NewServeMux()
+	dashboard.Register(mux)
 	roomAuth := identity.New()
 	if magic == nil {
 		magic = roomAuth.Wrap("abracada", "abr_", abracada.Handler())

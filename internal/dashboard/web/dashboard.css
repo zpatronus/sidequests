@@ -1,0 +1,29 @@
+:root {
+  color-scheme: light dark;
+  font: 16px system-ui, sans-serif;
+}
+body {
+  margin: 0;
+  background: Canvas;
+  color: CanvasText;
+}
+main {
+  width: min(760px, calc(100% - 36px));
+  margin: 3rem auto;
+}
+h1 { font-size: clamp(1.75rem, 5vw, 2.6rem); margin: 0; }
+h2 { font-size: 1rem; margin: 1.8rem 0 .6rem; }
+#status { min-height: 1.5em; color: GrayText; }
+dl {
+  margin: 0;
+  border-block-start: 1px solid color-mix(in srgb, CanvasText 20%, Canvas);
+}
+dl div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: .25rem 1rem;
+  padding: .85rem 0;
+  border-block-end: 1px solid color-mix(in srgb, CanvasText 20%, Canvas);
+}
+dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 650; }
