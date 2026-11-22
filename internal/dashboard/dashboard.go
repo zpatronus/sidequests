@@ -36,6 +36,8 @@ type snapshot struct {
 	ResidentKiB   *uint64   `json:"residentKiB"`
 	ProcessCPU    *float64  `json:"processCPU"`
 	cpuTime       *time.Duration
+	Network       *networkSample `json:"network"`
+	network       map[string]networkCounters
 	CPUs          int           `json:"cpus"`
 	Load          *[3]float64   `json:"load"`
 	Memory        *systemMemory `json:"memory"`
@@ -65,6 +67,7 @@ func Register(mux *http.ServeMux) {
 			next := collect("/proc")
 			next.CPUModel, next.OSRelease, next.Kernel = cpuModel, osRelease, kernel
 			next.ProcessCPU = cpuPercent(latest, next)
+			next.Network = measureNetwork(latest.network, next.network, next.SampledAt.Sub(latest.SampledAt))
 			latest = next
 		}
 		data := latest
@@ -96,6 +99,7 @@ func collect(procDir string) snapshot {
 		GoVersion:     runtime.Version(),
 		ResidentKiB:   readResidentMemory(procFields(filepath.Join(procDir, "self", "status"))),
 		cpuTime:       cpuTime,
+		network:       networkInterfaces(filepath.Join(procDir, "net", "dev")),
 		CPUs:          runtime.NumCPU(),
 		Load:          loadAverage(procFields(filepath.Join(procDir, "loadavg"))),
 		Memory:        readMemory(procFields(filepath.Join(procDir, "meminfo"))),

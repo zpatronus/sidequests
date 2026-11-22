@@ -74,3 +74,29 @@ func TestResidentMemoryHandlesMissingAndInvalidData(t *testing.T) {
 		t.Fatal("missing and invalid RSS should be unavailable")
 	}
 }
+
+func TestNetworkRatesAndCounterReset(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "dev")
+	const data = "lo: 900 0 0 0 0 0 0 0 900 0 0 0 0 0 0 0\n" +
+		"eth0: 120 0 0 0 0 0 0 0 60 0 0 0 0 0 0 0\n"
+	if err := os.WriteFile(path, []byte(data), 0600); err != nil {
+		t.Fatal(err)
+	}
+	current := networkInterfaces(path)
+	if len(current) != 1 {
+		t.Fatalf("expected one non-loopback interface, got %v", current)
+	}
+	previous := map[string]networkCounters{"eth0": {Received: 100, Sent: 50}}
+	result := measureNetwork(previous, current, 5*time.Second)
+	if result == nil || result.Totals != (networkCounters{Received: 120, Sent: 60}) ||
+		result.Rate == nil || *result.Rate != (networkRate{Received: 4, Sent: 2}) {
+		t.Fatalf("unexpected network reading: %+v", result)
+	}
+	reset := measureNetwork(current, previous, 5*time.Second)
+	if reset == nil || reset.Rate != nil || reset.Totals != previous["eth0"] {
+		t.Fatalf("expected totals without a rate after a counter reset: %+v", reset)
+	}
+	if measureNetwork(previous, nil, time.Second) != nil {
+		t.Fatal("missing counters should be unavailable")
+	}
+}
