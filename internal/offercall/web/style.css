@@ -196,9 +196,7 @@ dialog::backdrop{background:#0009}
 }
 
 #share[aria-busy="true"] { cursor: wait; }
-#share .share-loading,
 #share[aria-busy="true"] .share-icon { display: none; }
-#share[aria-busy="true"] .share-loading { display: inline; }
 
 #share[aria-busy="true"]::before {
   content: "";

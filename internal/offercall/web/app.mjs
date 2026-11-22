@@ -529,6 +529,7 @@ window.addEventListener('pageshow',event=>{
 
 window.addEventListener('hashchange',()=>location.reload());
 const shareButton=$('share');
+const shareLoading=shareButton.querySelector('.share-loading');
 shareButton.onclick=async()=>{
   const label=shareButton.getAttribute('aria-label');
   const controls=[
@@ -539,6 +540,7 @@ shareButton.onclick=async()=>{
   for(const control of controls)control.inert=true;
   shareButton.disabled=true;
   shareButton.setAttribute('aria-busy','true');
+  shareLoading.hidden=false;
   shareButton.setAttribute('aria-label','正在生成链接…');
   $('message').textContent='';
   let link, savedLocally=false;
@@ -553,6 +555,7 @@ shareButton.onclick=async()=>{
   } finally {
     shareButton.setAttribute('aria-label',label);
     shareButton.removeAttribute('aria-busy');
+    shareLoading.hidden=true;
     shareButton.disabled=false;
     for(const control of controls)control.inert=false;
     shareButton.focus();
