@@ -62,11 +62,14 @@ function showPolicy(){
   const costs=$('cost-reference');
   costs.replaceChildren();
   if(reference){
+    const rentLabel=reference.modeled?'市中心约 40 ㎡一居室整租估算':'一居室整租：市中心';
+    const outside=reference.outside===undefined?'':'，市中心外 '+reference.outside+' 元/月';
     const evidence=[
-      ['2026 年一居室整租：市中心 '+reference.rent+' 元/月，市中心外 '+reference.outside+' 元/月',reference.rentSource],
-      ['2026 年单人生活费：'+reference.living+' 元/月，不含房租',reference.livingSource],
-      [reference.trend,reference.trendSource],
+      [rentLabel+' '+reference.rent+' 元/月'+outside,reference.rentSource],
+      ['单人生活费估算：'+reference.living+' 元/月，不含房租',reference.livingSource],
     ];
+    if(reference.trend)evidence.push([reference.trend,reference.trendSource]);
+    if(reference.modeled)evidence.push(['查看 Livingcost 的数据与估算方法','https://livingcost.org/about']);
     const budget=document.createElement('ul');
     for(const [label,source] of evidence){
       const item=document.createElement('li');

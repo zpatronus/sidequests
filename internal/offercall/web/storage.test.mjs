@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {applyCityCosts,cityCostChanges,MAX_IMPORT_BYTES,planOfferImport,readOfferImport} from './storage.mjs';
+import {applyCityCosts,cityCostChanges,cityCostDefaults,MAX_IMPORT_BYTES,planOfferImport,readOfferImport} from './storage.mjs';
+import {cityCostReferences} from './data/city-costs.mjs';
 import {CITIES,CITY_REFERENCES} from './data/city-policies.mjs';
 
 test('城市预设展示差异，保留手填值与明确的 0',()=>{
@@ -20,6 +21,24 @@ test('城市目录覆盖 31 个省级行政区，目录与来源不重复',()=>{
   assert.equal(new Set(CITIES.map(city=>city.province)).size,31);
   assert.equal(new Set(CITIES.map(city=>city.name)).size,CITIES.length);
   assert.ok(CITIES.every(city=>CITY_REFERENCES[city.name].length>0));
+  for(const {name} of CITIES){
+    assert.ok(cityCostReferences[name].rent>0,name);
+    assert.ok(cityCostReferences[name].living>0,name);
+    assert.match(cityCostReferences[name].rentSource,/^https:\/\//);
+    assert.match(cityCostReferences[name].livingSource,/^https:\/\//);
+  }
+  assert.equal(cityCostReferences.宁波.rent,2400);
+  assert.equal(cityCostReferences.南京.rent,3100);
+  assert.equal(cityCostReferences.日喀则.rentSource,'https://livingcost.org/cost/china/shigatse');
+});
+
+test('新城市预设不覆盖旧备份中的生活成本',async()=>{
+  const saved={id:'old-offer',city:'南京市',rent:'1700',living:'0'};
+  const text=JSON.stringify({version:2,offers:[saved]});
+  const [restored]=await readOfferImport({size:text.length,text:async()=>text});
+  const costs=cityCostDefaults({});
+  assert.deepEqual(applyCityCosts(restored,costs),saved);
+  assert.equal(applyCityCosts({...restored,rent:''},costs).rent,'3100');
 });
 
 test('城市自定义租金覆盖内置预算',async()=>{

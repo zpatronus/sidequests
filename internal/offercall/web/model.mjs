@@ -157,7 +157,8 @@ export function calculate(o, scenario='target', {employmentYear=1, includeSign=s
   const assumptions = [
     policy?.notes,
     policy?.medical && policy===POLICIES.深圳?'深圳按 2026 年下半年新入职参考值全年化估算。养老、职工医保一档和失业险分别取基数。失业费率暂按个人 0.2%、单位 0.8% 参考估算。手填社保基数或合计费率可覆盖。':'',
-    n('socialBase')===null || n('fundBase')===null ? '假设用当前月 Base 按参考区间推算未填写的缴费基数。':'采用手填缴费基数。',
+    socialBase===null || fundBase===null ? '可在公积金与社保设置中补充缺少的缴费基数。' :
+      n('socialBase')===null || n('fundBase')===null ? '假设用当前月 Base 按参考区间推算未填写的缴费基数。':'采用手填缴费基数。',
     ordinary===null?'公积金比例待确认，按普通 '+personalRate+'%'+(personalExtra?'、补充 '+personalExtra+'%':'')+' 测算。':'采用手填个人公积金比例。',
     employerOrdinary===null?'单位普通公积金比例暂与个人相同。':'',
     isShanghai && ordinary!==null && supplement===null?'已填写普通公积金比例，未填写的补充公积金按 0 计。':'',

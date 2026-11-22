@@ -89,6 +89,7 @@ const localReferences = {
     {label:social,range:[7546,37731],source:'https://www.shanghai.gov.cn/nw17239/20260907/5b1efa2a9f004fb0897103bd4f75f559.html'},
     {label:fund,range:[2740,37731],source:'https://www.shanghai.gov.cn/gwk/affairs/content/0064@f3d788ec72e9404ebcbf3d27fda98435'},
   ],
+  宁波:[{label:fund+'（市区下限，暂行上限）',range:[2660,38907],fund:true,source:'https://www.haishu.gov.cn/col/col1229100020/art/2026/art_ed8daf35d53e482893accae0bcb57abd.html'}],
   杭州:[{label:fund,range:[2660,42151],source:'https://apiv4.cst123.cn/cst/news/shareDetail?id=1265385379872112640'}],
   深圳:[
     {label:'2026 年职工医保月缴费基数',range:[6727,33633],source:'https://hsa.sz.gov.cn/gkmlpt/content/12/12567/post_12567884.html'},

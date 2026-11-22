@@ -64,7 +64,8 @@ function nativeTime(value){
 const group=(title,html)=>'<fieldset><legend>'+title+'</legend><div class="grid-fields">'+html+'</div></fieldset>';
 function cityCostPlaceholder(offer,key) {
   const value=cityCosts[key].get(cityName(offer.city));
-  return value===undefined?(key==='rent'?'如 4000':'未知'):'城市默认 '+value+' 元/月';
+  if(value===undefined)return key==='rent'?'如 4000':'未知';
+  return '城市默认 '+value+' 元/月';
 }
 function fundPlaceholder(offer){
   return policyFor(offer)?.supplementalFund?'留空按普通 7%＋补充 5% 测算':'留空按 12% 测算';
@@ -259,12 +260,17 @@ function renderResults() {
   const peers=offers.filter(x=>x.id!==active).map(x=>[x,resultFor(x).net]);
   const differences=peers.map(([peer,value])=>[peer,r.net===null||value===null?null:r.net-value]);
   const signed=v=>v===null?'—':(v>0?'+':'')+fmt(v);
+  const missingPayroll=[
+    r.social===null?'社保':'',
+    r.fund===null?'公积金':'',
+  ].filter(Boolean).join('和');
+  const netStatus=r.cash===null?'待补充税前现金收入':missingPayroll?'待补充'+missingPayroll+'缴费参数':'税前现金 '+fmt(r.cash);
   const metrics=[
     ['guaranteed','保证税前年薪',r.guaranteed,r.fixed===null?'待补充固定工资':r.guaranteed===null?'已知固定年薪 '+fmt(r.fixed):o.status==='书面'||o.status==='口头'?'已确认录入':'按录入估算','固定工资 '+fmt(r.fixed)+' ＋ 保底奖金 '+fmt(r.guaranteedBonus)],
     ['target','目标税前年包',r.targetPackage,r.target===null?'待补充奖金或目标薪数':(employmentYear===2?'按第二年保底与绩效假设':'按首年绩效与签字费选项'),'目标经常性现金 '+fmt(r.target)+' ＋ 签字费 '+fmt(r.sign)+' ＋ 补贴、额外奖金和股权估值。'+(o.bonusMode==='factor'?' 按绩效系数计算的奖金 '+fmt(r.factorTarget)+'，其中超过保底的部分计为浮动。':'')],
     ['equity','年度股权估值',r.equity,r.equity===null?'可在更多设置填写':'按录入的年度估值','年度股权估值按填写金额列示。首年和第二年沿用同一年度估值。股权归属、变现和个税未纳入现金测算。'],
     ['all-in','税前现金＋股权',r.cashWithEquity,r.equity===null?'待填写年度股权估值':'本情景合计','本情景税前现金 '+fmt(r.cash)+' ＋ 年度股权估值 '+fmt(r.equity)+'。没有股权时可填写 0。'],
-    ['net','预计税后年收入',r.net,r.net===null?'待补充测算信息':'税前现金 '+fmt(r.cash),'估算 · '+r.taxMethod+'。本情景税前现金 '+fmt(r.cash)+' − 个人社保 '+fmt(r.social)+' − 个人公积金 '+fmt(r.fund)+' − 个税 '+fmt(r.tax)+'。综合计税 '+fmt(r.merged)+'，可用单独计税方案 '+fmt(r.split)+'。计税扣除：基本减除费用 '+fmt(r.basicDeduction)+' ＋ 个人社保 '+fmt(r.social)+' ＋ 可税前扣除的个人公积金 '+fmt(r.deductibleFund)+' ＋ 专项附加扣除 '+(r.deduction===null?'未填写，本次按 0 计':fmt(r.deduction))+'，合计 '+fmt(r.taxableDeductions)+'。并入计税的超限单位公积金 '+fmt(r.taxableCompanyFund)+'，单独计税奖金 '+fmt(r.splitBonus)+'，综合所得应纳税所得额 '+fmt(r.comprehensiveTaxable)+'。'],
+    ['net','预计税后年收入',r.net,netStatus,'估算 · '+r.taxMethod+'。本情景税前现金 '+fmt(r.cash)+' − 个人社保 '+fmt(r.social)+' − 个人公积金 '+fmt(r.fund)+' − 个税 '+fmt(r.tax)+'。综合计税 '+fmt(r.merged)+'，可用单独计税方案 '+fmt(r.split)+'。计税扣除：基本减除费用 '+fmt(r.basicDeduction)+' ＋ 个人社保 '+fmt(r.social)+' ＋ 可税前扣除的个人公积金 '+fmt(r.deductibleFund)+' ＋ 专项附加扣除 '+(r.deduction===null?'未填写，本次按 0 计':fmt(r.deduction))+'，合计 '+fmt(r.taxableDeductions)+'。并入计税的超限单位公积金 '+fmt(r.taxableCompanyFund)+'，单独计税奖金 '+fmt(r.splitBonus)+'，综合所得应纳税所得额 '+fmt(r.comprehensiveTaxable)+'。'],
     ['monthly','每月税后收入',r.monthly,'年均','预计税后年收入 ÷ 12。'],
     ['hourlyCash','税前现金时薪',r.hourlyCash,r.workHours===null?'待填写有效工作时间':'按 '+r.workHours.toLocaleString('zh-CN',{maximumFractionDigits:1})+' 小时/年','本情景税前现金 ÷ 年工时。年工时＝每天开始到结束的时长 × 每周工作天数 × 52。'],
     ['hourlyNet','税后到手时薪',r.hourlyNet,r.workHours===null?'待填写有效工作时间':'按当前情景税后现金','本情景税后到手现金 ÷ 年工时。工作时段包含午休，全年按 52 周折算。'],
@@ -299,9 +305,10 @@ function refreshCityDefaults() {
 const cityDialog=$('city-defaults-dialog');
 function renderCityDefaults() {
   const changes=cityCostChanges(current(),cityCosts);
-  $('city-defaults-title').textContent=cityName(current().city)+' · 生活成本默认值';
+  const city=cityName(current().city);
+  $('city-defaults-title').textContent=city+' · 生活成本默认值';
   $('city-defaults-list').innerHTML=changes.map(({field,current,next})=>
-    '<li><div><strong>'+esc(numeric[field])+'</strong><p>从 '+esc(current||'空白')+' → '+esc(next)+' 元/月</p></div>'+
+    '<li><div><strong>'+esc(numeric[field])+'</strong><p>从 '+esc(current||'空白')+' → '+esc(next)+' 元/月'+'</p></div>'+
     '<button type="button" data-city-cost="'+field+'" aria-label="替换'+esc(numeric[field])+'">替换</button></li>'
   ).join('');
 }

@@ -239,3 +239,16 @@ test('工作时薪默认按 975，支持跨午夜、调整天数和缺失输入'
   assert.equal(calculate({...o,workStart:''}).hourlyCash,null);
   assert.equal(calculate({...o,workDays:'8'}).hourlyNet,null);
 });
+
+
+test('生活费缺项不影响税后收入；宁波可用手填社保参数测算',()=>{
+  const input=offer({city:'宁波',base:'30000',guaranteed:'0',variable:'0',fundRate:'7',socialBase:'20000',socialRate:'10'});
+  const withoutCosts=calculate(input);
+  const withCosts=calculate({...input,rent:'2400',living:'3400'});
+  assert.equal(withoutCosts.fundBase,30000);
+  assert.ok(Number.isFinite(withoutCosts.net));
+  assert.equal(withoutCosts.net,withCosts.net);
+  assert.equal(withoutCosts.remaining,null);
+  assert.equal(withCosts.remaining,withCosts.net-5800*12);
+  assert.equal(calculate({...input,socialRate:null}).net,null);
+});
