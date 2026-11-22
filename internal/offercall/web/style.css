@@ -16,6 +16,7 @@ header{background:var(--paper);border-bottom:1px solid var(--line)}
 .primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent);font-weight:650}
 #saved{font-size:12px;color:var(--green)}
 .intro{padding:24px 0 15px}
+#autosave-hint{font-size:12px}
 h1,h2,h3,p{margin:0}
 h1{font-size:32px;letter-spacing:-.04em;margin:5px 0 6px}
 h2{font-size:19px;letter-spacing:-.025em}
@@ -179,7 +180,7 @@ dialog::backdrop{background:#0009}
 
 #table td,.row-chart-label b{font-variant-numeric:tabular-nums;letter-spacing:.015em}
 
-[data-readonly] :is(#share, #delete-offer, #add, #import, .reset-field, a[href="settings.html"]),
+[data-readonly] :is(#autosave-hint, #share, #delete-offer, #add, #import, .reset-field, a[href="settings.html"]),
 [data-readonly] #app[hidden] {
   display: none;
 }
