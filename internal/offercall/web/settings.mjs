@@ -33,7 +33,7 @@ function showPolicy(){
   const target=$('policy');
   const summary=document.createElement('p');
   summary.className='settings-context';
-  summary.textContent=policy?.employee?'支持自动测算':items.length?'已收录部分参数，缺项可按 Offer 覆盖。':'政策参数待补充。';
+  summary.textContent=policy?.provisional?'支持自动测算。部分参数为参考值，可按 Offer 覆盖。':'支持自动测算，可按 Offer 覆盖。';
   target.replaceChildren(summary);
   const list=document.createElement('ul');
   for(const {label,range,source} of items){
@@ -46,6 +46,15 @@ function showPolicy(){
     item.append(link);
     if(range)item.append(' '+range[0].toLocaleString('zh-CN')+'–'+range[1].toLocaleString('zh-CN')+' 元/月');
     list.append(item);
+  }
+  if(policy){
+    const ranges=[['养老',policy.social],['医保',policy.medical],['失业',policy.unemployment],['公积金',policy.fund]];
+    for(const [label,range] of ranges){
+      if(!range)continue;
+      const item=document.createElement('li');
+      item.textContent=label+'测算月基数 '+range.map(value=>value.toLocaleString('zh-CN')).join('–')+' 元';
+      list.append(item);
+    }
   }
   if(policy?.range){
     const item=document.createElement('li');
@@ -107,8 +116,8 @@ function fallback(offer,key){
     supplement:policy?.supplementalFund?result.personalExtra:undefined,
     employerFund:result.companyRate,
     employerSupplement:policy?.supplementalFund?result.companyExtra:undefined,
-    socialRate:policy?.medical?'按各险种基数和费率':sumRates(policy?.employee),
-    employerSocial:policy?.medical?'按各险种基数和费率':sumRates(policy?.employer),
+    socialRate:(policy?.medical||policy?.unemployment)?'按各险种基数和费率':sumRates(policy?.employee),
+    employerSocial:(policy?.medical||policy?.unemployment)?'按各险种基数和费率':sumRates(policy?.employer),
     socialFixed:policy?.fixed,
   }[key];
 }

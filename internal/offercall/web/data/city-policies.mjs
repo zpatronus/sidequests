@@ -1,3 +1,5 @@
+import {cityPayroll} from './city-payroll.mjs';
+
 const xiamenSocialSource = 'https://app.hrss.xm.gov.cn/jcubing/12333query/file-api/V1/b22ad292-5aa1-45f2-846c-1b42e5ad0993.html';
 const establishedPolicies = {
   厦门: {
@@ -97,13 +99,11 @@ const localReferences = {
   ],
 };
 
-export const CITY_REFERENCES = Object.fromEntries(CITIES.map(({name,province})=>
-  [name,[...(regionalReferences[province]??[]),...(localReferences[name]??[])]]));
-export const POLICIES = Object.fromEntries(CITIES.flatMap(({name})=>{
-  if(Object.hasOwn(establishedPolicies,name))return [[name,establishedPolicies[name]]];
-  const references=CITY_REFERENCES[name];
-  if(!references.length)return [];
-  const base=references.find(entry=>entry.combined)?.range;
-  const housing=references.find(entry=>entry.fund);
-  return [[name,{social:base,fund:housing?.range,fundRound:housing?.round,notes:'已收录部分当地政策。请手动填写未收录的缴费参数。'}]];
+export const CITY_REFERENCES = Object.fromEntries(CITIES.map(({name,province})=>{
+  const policy=cityPayroll[name];
+  const payrollReference=policy?[{label:'自动测算参数来源与核查记录',source:policy.source}]:[];
+  return [name,[...(regionalReferences[province]??[]),...(localReferences[name]??[]),...payrollReference]];
 }));
+
+export const POLICIES = Object.fromEntries(CITIES.map(({name})=>
+  [name,establishedPolicies[name]??cityPayroll[name]]));

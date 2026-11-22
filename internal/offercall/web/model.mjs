@@ -140,6 +140,10 @@ export function calculate(o, scenario='target', {employmentYear=1, includeSign=s
   const splitBonus = useSplit ? eligible : 0;
   const comprehensiveTaxable = cash===null || taxableDeductions===null ? null : Math.max(0,taxableCash-splitBonus-taxableDeductions);
   const net = tax===null ? null : cash-tax-social-fund;
+  const partialTax = net===null && taxableCash!==null
+    ? annualTax(taxableCash-basicDeduction-(social??0)-(deductibleFund??0)-(deduction??0))
+    : null;
+  const partialNet = partialTax===null ? null : cash-partialTax-(social??0)-(fund??0);
   const workHours=annualWorkHours(o);
   const hourlyCash=workHours===null || cash===null ? null : cash/workHours;
   const hourlyNet=workHours===null || net===null ? null : net/workHours;
@@ -171,7 +175,7 @@ export function calculate(o, scenario='target', {employmentYear=1, includeSign=s
     o.tax==='单独计税' && !canSplit?'单独计税条件尚未满足，本情景暂按并入综合所得估算。':'',
     '按完整年度测算，入职日和试用期仅记录。单位社保参考值含养老、医疗、失业，医疗按当地含生育口径；工伤等差异可手填覆盖。',
   ].filter(Boolean);
-  return {base,fixed,factorTarget,guaranteedBonus,guaranteed,variable,target,targetPackage:sum(target,sign??0,subsidy??0,extra??0,equity??0),cash,cashWithEquity,sign,equity,subsidy,extra,personalRate,personalExtra,companyRate,companyExtra,socialBase,medicalBase,unemploymentBase,fundBase,fund,companyFund,totalFund:sum(fund,companyFund),social,companySocial,merged,split,tax,taxMethod:useSplit?'全年一次性奖金单独计税':'并入综合所得',deductibleFund,taxableCompanyFund,basicDeduction,deduction,taxableDeductions,splitBonus,comprehensiveTaxable,net,workHours,hourlyCash,hourlyNet,monthly:multiply(net,1/12),rent,living,costs,remaining,warnings:warnings.slice(0,3),assumptions};
+  return {base,fixed,factorTarget,guaranteedBonus,guaranteed,variable,target,targetPackage:sum(target,sign??0,subsidy??0,extra??0,equity??0),cash,cashWithEquity,sign,equity,subsidy,extra,personalRate,personalExtra,companyRate,companyExtra,socialBase,medicalBase,unemploymentBase,fundBase,fund,companyFund,totalFund:sum(fund,companyFund),social,companySocial,merged,split,tax,taxMethod:useSplit?'全年一次性奖金单独计税':'并入综合所得',deductibleFund,taxableCompanyFund,basicDeduction,deduction,taxableDeductions,splitBonus,comprehensiveTaxable,net,partialNet,workHours,hourlyCash,hourlyNet,monthly:multiply(net,1/12),rent,living,costs,remaining,warnings:warnings.slice(0,3),assumptions};
 }
 export function encode(offers) {return JSON.stringify({version:OFFER_VERSION,offers},null,2);}
 export function decode(raw,{maxOffers=Infinity}={}) {

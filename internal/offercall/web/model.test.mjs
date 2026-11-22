@@ -1,3 +1,4 @@
+import {CITIES,POLICIES} from './data/city-policies.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {amount,calculate,decode,defaults,encode} from './model.mjs';
@@ -179,7 +180,7 @@ test('签字费独立于首年特殊设置，始终只影响首年',()=>{
   assert.equal(calculate({...o,firstYearSpecial:'no'}).cash,580000);
 });
 
-test('厦门支持税后自动测算，部分政策城市不会把缺失的费率当零',()=>{
+test('厦门和郑州使用各自的自动测算参数',()=>{
   const xiamen=calculate(offer({city:'厦门',base:'5万',guaranteed:'0',variable:'0'}));
   assert.equal(xiamen.socialBase,22893);
   assert.equal(xiamen.fundBase,32937);
@@ -188,7 +189,7 @@ test('厦门支持税后自动测算，部分政策城市不会把缺失的费�
   const partial=calculate(zhengzhou);
   assert.equal(partial.socialBase,19560);
   assert.equal(partial.fundBase,28849);
-  assert.equal(partial.net,null);
+  assert.ok(partial.net>0);
   assert.ok(calculate({...zhengzhou,socialRate:'10.5'}).net>0);
 });
 
@@ -241,7 +242,7 @@ test('工作时薪默认按 975，支持跨午夜、调整天数和缺失输入'
 });
 
 
-test('生活费缺项不影响税后收入；宁波可用手填社保参数测算',()=>{
+test('生活费缺项不影响税后收入；宁波支持手填或自动测算',()=>{
   const input=offer({city:'宁波',base:'30000',guaranteed:'0',variable:'0',fundRate:'7',socialBase:'20000',socialRate:'10'});
   const withoutCosts=calculate(input);
   const withCosts=calculate({...input,rent:'2400',living:'3400'});
@@ -250,5 +251,36 @@ test('生活费缺项不影响税后收入；宁波可用手填社保参数测�
   assert.equal(withoutCosts.net,withCosts.net);
   assert.equal(withoutCosts.remaining,null);
   assert.equal(withCosts.remaining,withCosts.net-5800*12);
-  assert.equal(calculate({...input,socialRate:null}).net,null);
+  const automatic=calculate({...input,socialBase:null,socialRate:null});
+  assert.equal(automatic.socialBase,25611);
+  assert.ok(Number.isFinite(automatic.net));
+});
+
+
+test('未知缴费时提供有明确口径的税后参考，完整到手仍待补充',()=>{
+  const input=offer({city:'其他城市',base:'10000',guaranteed:'0',variable:'0'});
+  const partial=calculate(input);
+  assert.equal(partial.net,null);
+  assert.equal(partial.partialNet,116520);
+  assert.equal(partial.remaining,null);
+  assert.equal(calculate({...input,rent:'1700',living:'2300'}).partialNet,partial.partialNet);
+  const complete=calculate({...input,socialBase:'10000',socialRate:'10',fundBase:'10000',fundRate:'5'});
+  assert.ok(Number.isFinite(complete.net));
+  assert.equal(complete.partialNet,null);
+});
+
+
+test('全部目录城市在无手填缴费参数时可以自动测算',()=>{
+  for(const {name} of CITIES){
+    const policy=POLICIES[name];
+    for(const base of ['1000','10000','100000']){
+      const result=calculate(offer({city:name,base,guaranteed:'0',variable:'0'}));
+      for(const field of ['social','fund','tax','net','companySocial','companyFund']){
+        assert.ok(Number.isFinite(result[field]),name+' '+base+' '+field);
+      }
+      assert.ok(result.socialBase>=policy.social[0] && result.socialBase<=policy.social[1],name);
+      assert.ok(result.fundBase>=policy.fund[0] && result.fundBase<=policy.fund[1],name);
+      assert.equal(result.partialNet,null,name);
+    }
+  }
 });

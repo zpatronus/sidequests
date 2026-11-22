@@ -83,3 +83,5 @@ The Chinese adaptation in `internal/secrethitler/` is licensed under **CC BY-NC-
 The editor uses a private random credential stored in browser local storage for this origin. Clearing site data or switching browser profiles creates a new editor identity. To bring existing Offer Desk data from a different origin, export and import the JSON backup.
 
 The share button saves the current workspace and returns a stable, separate UUID link. Anyone with the link can see all offers, notes, and subsequent synced edits when they open or reload the page. The share link has read access only.
+
+Offer Call payroll presets adapt the [city-salary payroll reference](https://github.com/weante/city-salary/tree/2f1be4ff07c36206430d4d02035e30f7c1bf21c1) under the [MIT license](internal/offercall/web/data/city-payroll-LICENSE.txt). City settings link to the source records and mark provisional values.

@@ -255,7 +255,7 @@ function renderResults() {
   const o=current(), r=resultFor(o);
   const p=policyFor(o);
   $('status').textContent=o.status||'未知';
-  $('summary-context').textContent=[name(o),employmentYear===2?'第二年':'首年',scenarios[scenario],p?.employee?YEAR+' 年参考参数':p?'部分缴费参数已收录':'缴费政策待补充'].join(' · ');
+  $('summary-context').textContent=[name(o),employmentYear===2?'第二年':'首年',scenarios[scenario],p?.provisional?'自动测算 · 部分缴费参数为参考值':p?YEAR+' 年参考参数':'缴费政策待补充'].join(' · ');
   $('unit').textContent=unit+' ⇄';
   const peers=offers.filter(x=>x.id!==active).map(x=>[x,resultFor(x).net]);
   const differences=peers.map(([peer,value])=>[peer,r.net===null||value===null?null:r.net-value]);
@@ -278,6 +278,11 @@ function renderResults() {
     ['totalFund','公积金总积累',r.totalFund,'含公司与个人','个人 '+fmt(r.fund)+' ＋ 单位 '+fmt(r.companyFund)+'。单列为资产积累。'],
     ['remaining','税后剩余现金',r.remaining,r.costs===null?'待补充生活成本':'扣除生活成本','税后现金 − 年租金 '+fmt(r.rent)+' − 其他年生活费 '+fmt(r.living)+'。'],
   ];
+  if(r.partialNet!==null){
+    const netMetric=metrics.find(([key])=>key==='net');
+    netMetric.splice(1,4,'税后现金参考',r.partialNet,'未扣 '+missingPayroll,
+      '按综合所得估算，并扣除已知的个人缴费。补齐'+missingPayroll+'缴费参数后可查看预计到手收入。');
+  }
   $('metrics').innerHTML=metrics.map(([k,l,v,status])=>'<button data-metric="'+k+'" aria-expanded="'+(selectedMetric===k)+'" class="metric '+(k==='net'?'accent':'')+'"><span>'+l+'</span><strong class="'+(v===null?'unknown':'')+'">'+(hourlyFields.has(k)?formatHourly(v):fmt(v))+'</strong><small>'+esc(status)+'</small></button>').join('');
   const gapSection=$('income-gaps');
   gapSection.hidden=!differences.length;
@@ -294,7 +299,7 @@ function renderResults() {
     '<div class="chart"><h3>现金薪资构成 <small>目标结构 · 已录入部分</small></h3>'+chart(r)+'</div>'+
     (hr>0?'<div class="quotes"><span>HR 报价 <b>'+fmt(hr)+'</b></span></div>':'')+
     (showHrGap?'<p class="reconcile quote-warning"><b>报价差异超过 1%</b> · 计算年包比 HR 报价'+(hrGap>0?'高':'低')+' '+fmt(Math.abs(hrGap))+'（'+Math.abs(hrGapPercent).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:3})+'%）。请核对报价包含的项目。</p>':'')+
-    '<details class="assumptions" '+(document.querySelector('.assumptions')?.open?'open':'')+'><summary>查看计算假设与社保</summary><p>个人社保 '+fmt(r.social)+' · 公司社保 '+fmt(r.companySocial)+' · '+(p?.medical?'养老 / 医保 / 失业月基数 '+[r.socialBase,r.medicalBase,r.unemploymentBase].map(v=>fmt(v,'元')).join(' / '):'社保月基数 '+fmt(r.socialBase,'元'))+'</p>'+'<p><a href="settings.html">查看城市政策与缴费设置</a></p>'+'<ul>'+r.assumptions.map(a=>'<li>'+esc(a)+'</li>').join('')+'</ul></details>';
+    '<details class="assumptions" '+(document.querySelector('.assumptions')?.open?'open':'')+'><summary>查看计算假设与社保</summary><p>个人社保 '+fmt(r.social)+' · 公司社保 '+fmt(r.companySocial)+' · '+((p?.medical||p?.unemployment)?'养老 / 医保 / 失业月基数 '+[r.socialBase,r.medicalBase,r.unemploymentBase].map(v=>fmt(v,'元')).join(' / '):'社保月基数 '+fmt(r.socialBase,'元'))+'</p>'+'<p><a href="settings.html">查看城市政策与缴费设置</a></p>'+'<ul>'+r.assumptions.map(a=>'<li>'+esc(a)+'</li>').join('')+'</ul></details>';
   hideComparisonChart();
   $('table').innerHTML=comparisonTable();
 }
