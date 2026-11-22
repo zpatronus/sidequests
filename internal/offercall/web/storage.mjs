@@ -45,13 +45,22 @@ export function cityCostDefaults(overrides) {
     field,new Map([...Object.entries(cityCostReferences).map(([city,reference])=>[city,String(reference[field])]),...(overrides ? Object.entries(overrides[field]??{}) : cityCostOverrides(field))]),
   ]));
 }
-export function applyCityCosts(offer,costs,{includeZero=false}={}) {
+export function cityCostChanges(offer,costs) {
+  const city=cityName(offer.city);
+  return cityCostFields.flatMap(field=>{
+    const current=String(offer[field]??'').trim();
+    const next=costs[field].get(city);
+    if(next===undefined || (current && amount(current)===amount(next)))return [];
+    return [{field,current,next}];
+  });
+}
+export function applyCityCosts(offer,costs) {
   const city=cityName(offer.city);
   const defaults={};
   for(const field of cityCostFields){
     const value=offer[field];
     const cost=costs[field].get(city);
-    if(cost!==undefined&&(!String(value??'').trim()||(includeZero&&amount(value)===0)))defaults[field]=cost;
+    if(cost!==undefined&&!String(value??'').trim())defaults[field]=cost;
   }
   return {...offer,...defaults};
 }

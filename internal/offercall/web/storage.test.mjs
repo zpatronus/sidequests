@@ -1,16 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {applyCityCosts,MAX_IMPORT_BYTES,planOfferImport,readOfferImport} from './storage.mjs';
+import {applyCityCosts,cityCostChanges,MAX_IMPORT_BYTES,planOfferImport,readOfferImport} from './storage.mjs';
 import {CITIES,CITY_REFERENCES} from './data/city-policies.mjs';
 
-test('切换城市填补空白与 0，并保留自填生活成本',()=>{
+test('城市预设展示差异，保留手填值与明确的 0',()=>{
   const costs={rent:new Map([['上海','7900']]),living:new Map([['上海','3k']])};
-  const offer={city:'上海市',rent:'',living:'0'};
-  assert.deepEqual(applyCityCosts(offer,costs),{...offer,rent:'7900'});
-  assert.deepEqual(applyCityCosts(offer,costs,{includeZero:true}),{...offer,rent:'7900',living:'3k'});
-  assert.equal(applyCityCosts({...offer,rent:'5200'},costs,{includeZero:true}).rent,'5200');
-  assert.equal(applyCityCosts({...offer,rent:'5/0'},costs,{includeZero:true}).rent,'5/0');
-  assert.deepEqual(offer,{city:'上海市',rent:'',living:'0'});
+  const offer={city:' 上海市 ',rent:'5200',living:'0'};
+  assert.deepEqual(cityCostChanges(offer,costs),[
+    {field:'rent',current:'5200',next:'7900'},
+    {field:'living',current:'0',next:'3k'},
+  ]);
+  assert.deepEqual(cityCostChanges({...offer,rent:'7.9k',living:'3000'},costs),[]);
+  assert.deepEqual(cityCostChanges({...offer,city:'其他城市'},costs),[]);
+  assert.deepEqual(applyCityCosts(offer,costs),offer);
+  assert.deepEqual(applyCityCosts({...offer,rent:''},costs),{...offer,rent:'7900'});
 });
 
 test('城市目录覆盖 31 个省级行政区，目录与来源不重复',()=>{

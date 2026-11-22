@@ -1,9 +1,8 @@
 import {readShare,startCloud} from './cloud.mjs';
 import {chooseImportMode,confirmReset} from './dialogs.mjs';
 import {hasMoneyUnit,invalidNumber} from './numbers.mjs';
-import {CITIES,CITY_REFERENCES,POLICIES} from './data/city-policies.mjs';
 import {amount,calculate,decode,defaults,encode,minutesOfDay,numeric,policyFor,prefillNumbers,scenarios} from './model.mjs';
-import {applyCityCosts,cityCostDefaults,cityCostFields,cityName,loadOffers,planOfferImport,readOfferImport,readSetting,writeOffers,writeSetting} from './storage.mjs';
+import {applyCityCosts,cityCostChanges,cityCostDefaults,cityCostFields,cityName,loadOffers,planOfferImport,readOfferImport,readSetting,writeOffers,writeSetting} from './storage.mjs';
 import {YEAR} from './policy.mjs';
 import {csvCell,reportMarkdown,reportRows as rows,hourlyFields,formatHourly} from './report.mjs';
 
@@ -82,7 +81,7 @@ function field(o,k,{label=numeric[k]??k,options,placeholder='',type='text',suffi
   const value=o[k]??(k.startsWith('work')?defaults[k]:'')??'';
   const reset=resetField(o,k);
   const content=options?'<select name="'+k+'">'+options.map(([v,l])=>'<option value="'+esc(v)+'" '+(value===v?'selected':'')+'>'+esc(l)+'</option>').join('')+'</select>':
-    '<input name="'+k+'" type="'+type+'" '+(workTimeFields.has(k)?'list="work-time-options" step="60" autocomplete="off" aria-invalid="'+invalidTime(value)+'" ':'')+(['city','payCity'].includes(k)?'list="city-options" ':'')+(k in numeric?'inputmode="text" aria-invalid="'+invalidNumber(k,value)+'"':'')+' value="'+esc(workTimeFields.has(k)?nativeTime(value):value)+'" placeholder="'+esc(placeholder)+'">';
+    '<input name="'+k+'" type="'+type+'" '+(workTimeFields.has(k)?'list="work-time-options" step="60" autocomplete="off" aria-invalid="'+invalidTime(value)+'" ':'')+(k in numeric?'inputmode="text" aria-invalid="'+invalidNumber(k,value)+'"':'')+' value="'+esc(workTimeFields.has(k)?nativeTime(value):value)+'" placeholder="'+esc(placeholder)+'">';
   const tooltip=help?'<span class="field-help" tabindex="0" aria-label="'+esc(label)+'说明" aria-describedby="help-'+k+'">?<span id="help-'+k+'" role="tooltip">'+esc(help)+'</span></span>':'';
   return '<label class="field '+(wide?'wide':'')+'"><span class="field-title"><span class="field-name">'+esc(label)+'</span>'+tooltip+'</span><span class="control">'+content+(suffix??'')+'</span>'+reset+'</label>';
 }
@@ -115,7 +114,7 @@ function renderFields() {
   const yearFields=special
     ? group('首年',guarantee+hr)+group('第二年',secondGuarantee)
     : '';
-  $('fields').innerHTML=group('基本信息',f('company',{label:'公司名称'})+f('city',{label:'工作城市',placeholder:'选择或输入城市'})+f('status',{label:'Offer 状态',options:empty('未知','预估','口头','书面')}))+
+  $('fields').innerHTML=group('基本信息',f('company',{label:'公司名称'})+'<div class="city-field">'+f('city',{label:'工作城市',placeholder:'如 上海、深圳'})+'<button type="button" id="city-defaults" aria-haspopup="dialog" hidden>查看城市默认值</button></div>'+f('status',{label:'Offer 状态',options:empty('未知','预估','口头','书面')}))+
     group('薪资信息',f('base',{placeholder:'如 5.5万'})+f('months',{placeholder:'未知'})+mode+f('sign',{label:'首年签字费',placeholder:'选填'})+specialControl+sharedBonus+(special?'':guarantee+hr))+
     yearFields+
     group('工作时间',f('workStart',{label:'开始时间',type:'time'})+f('workEnd',{label:'结束时间',type:'time'})+f('workDays',{placeholder:'如 5'}))+
@@ -134,6 +133,7 @@ function renderFields() {
     group('报价与薪资',f('targetMonths',{placeholder:'如 18，保底未知可留空'})+f('equity')+f('subsidy')+f('extra'))+
     group('岗位与进度',f('role',{label:'岗位'})+f('level',{label:'职级'})+f('start',{label:'入职日期',type:'date'})+f('probation')+f('probationRate')+f('approval',{label:'审批状态',options:empty('待确认','需要审批','无需审批','审批通过')}))+
     '</details>';
+  refreshCityDefaults();
   $('notes').value=o.notes||'';
   $('notes').readOnly=readOnly;
   if(readOnly)for(const input of $('fields').elements){
@@ -293,6 +293,45 @@ function renderResults() {
   $('table').innerHTML=comparisonTable();
 }
 function full() {renderTabs();renderFields();renderResults();}
+function refreshCityDefaults() {
+  $('city-defaults').hidden=readOnly||cityCostChanges(current(),cityCosts).length===0;
+}
+const cityDialog=$('city-defaults-dialog');
+function renderCityDefaults() {
+  const changes=cityCostChanges(current(),cityCosts);
+  $('city-defaults-title').textContent=cityName(current().city)+' · 生活成本默认值';
+  $('city-defaults-list').innerHTML=changes.map(({field,current,next})=>
+    '<li><div><strong>'+esc(numeric[field])+'</strong><p>从 '+esc(current||'空白')+' → '+esc(next)+' 元/月</p></div>'+
+    '<button type="button" data-city-cost="'+field+'" aria-label="替换'+esc(numeric[field])+'">替换</button></li>'
+  ).join('');
+}
+$('fields').addEventListener('click',e=>{
+  if(readOnly||e.target.id!=='city-defaults')return;
+  renderCityDefaults();
+  cityDialog.showModal();
+});
+cityDialog.addEventListener('click',e=>{
+  const field=e.target.closest('[data-city-cost]')?.dataset.cityCost;
+  if(readOnly||!field)return;
+  const offer=current();
+  for(const change of cityCostChanges(offer,cityCosts)){
+    if(field==='all'||field===change.field)offer[change.field]=change.next;
+  }
+  save();
+  renderFields();
+  renderResults();
+  if(cityCostChanges(offer,cityCosts).length){
+    renderCityDefaults();
+    cityDialog.querySelector('[data-city-cost]').focus();
+  }else{
+    cityDialog.close();
+  }
+});
+cityDialog.addEventListener('close',()=>{
+  const trigger=$('city-defaults');
+  (trigger.hidden?$('fields').elements.city:trigger).focus();
+});
+
 $('fields').addEventListener('submit',e=>e.preventDefault());
 $('fields').addEventListener('input',e=>{
   if(readOnly||!e.target.name)return;
@@ -316,19 +355,14 @@ $('fields').addEventListener('input',e=>{
     const fundInput=$('fields').elements.fundRate;
     fundInput.placeholder=fundPlaceholder(offer);
     refreshReset(fundInput);
-    const withDefaults=applyCityCosts(offer,cityCosts,{includeZero:true});
     for(const key of cityCostFields){
       const input=$('fields').elements[key];
-      if(withDefaults[key]!==offer[key]){
-        offer[key]=withDefaults[key];
-        input.value=offer[key];
-        input.setAttribute('aria-invalid',String(invalidNumber(key,input.value)));
-      }
       input.placeholder=cityCostPlaceholder(offer,key);
       refreshReset(input);
     }
   }
   refreshReset(e.target);
+  if(e.target.name==='city'||cityCostFields.includes(e.target.name))refreshCityDefaults();
   if(['bonusMode','firstYearSpecial'].includes(e.target.name)){
     renderFields();
     $('fields').elements[e.target.name].focus();
@@ -521,7 +555,6 @@ $('work-time-options').innerHTML=Array.from({length:96},(_,index)=>{
   const minutes=String((index%4)*15).padStart(2,'0');
   return '<option value="'+hours+':'+minutes+'"></option>';
 }).join('');
-$('city-options').innerHTML=CITIES.map(({name,province})=>'<option value="'+esc(name)+'" label="'+esc(province+(POLICIES[name]?.employee?' · 支持自动估算':CITY_REFERENCES[name]?.length?' · 部分参数':' · 待补充参数'))+'"></option>').join('');
 renderYears();full();
 window.addEventListener('pageshow',event=>{
   if(!event.persisted)return;

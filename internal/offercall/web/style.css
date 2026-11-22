@@ -231,3 +231,30 @@ dialog::backdrop{background:#0009}
 }
 
 #readonly-notice p { margin-top: 4px; }
+
+.city-field { min-width: 0; }
+
+#city-defaults {
+  margin-top: 5px;
+  color: var(--accent);
+  white-space: normal;
+}
+
+#city-defaults-list {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+}
+
+#city-defaults-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px;
+  background: var(--soft);
+}
+
+#city-defaults-list p { overflow-wrap: anywhere; }

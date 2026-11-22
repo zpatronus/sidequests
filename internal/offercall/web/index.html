@@ -24,7 +24,16 @@
 </form>
 </dialog>
 <aside id="comparison-chart" class="row-chart" aria-hidden="true" hidden></aside>
-<datalist id="city-options"></datalist>
+<dialog id="city-defaults-dialog" aria-labelledby="city-defaults-title">
+<form method="dialog">
+<h2 id="city-defaults-title"></h2>
+<ul id="city-defaults-list"></ul>
+<div class="dialog-actions">
+<button autofocus>完成</button>
+<button type="button" class="primary" data-city-cost="all">全部替换</button>
+</div>
+</form>
+</dialog>
 <datalist id="work-time-options"></datalist>
 <dialog id="share-dialog"><form method="dialog"><div class="heading"><h2>共享只读链接</h2><button aria-label="关闭">×</button></div><p>请将此链接分享给你信任的人（如家人）。收到链接的人也能看到后续更新。</p><label for="share-url">只读链接</label><input id="share-url" type="url" readonly><button type="button" id="copy-share">复制链接</button><p id="share-status" role="status"></p></form></dialog>
 <dialog id="share-error-dialog" aria-labelledby="share-error-title" aria-describedby="share-error-message">
