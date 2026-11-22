@@ -23,7 +23,12 @@ if(readOnly){
     $('saved').textContent=error.message==='404'?'链接无效或已失效':'无法加载只读页面，请稍后重试';
     throw error;
   }
-  $('saved').textContent='只读共享';
+  document.title='只读共享 · Offer Desk';
+  $('saved').hidden=true;
+  $('readonly-notice').hidden=false;
+  $('entry-title').textContent='Offer 详情';
+  $('entry-help').hidden=true;
+  $('tabs').setAttribute('aria-label','Offer 切换');
   $('app').hidden=false;
 }
 let offers=readOnly?sharedOffers:loadOffers();

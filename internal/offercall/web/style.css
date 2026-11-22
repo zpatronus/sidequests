@@ -216,3 +216,17 @@ dialog::backdrop{background:#0009}
 @media (prefers-reduced-motion: reduce) {
   #share[aria-busy="true"]::before { animation: none; }
 }
+
+#readonly-notice {
+  margin-bottom: 14px;
+  padding: 12px 16px;
+  border-inline-start: 4px solid var(--accent);
+  background: var(--accent-soft);
+}
+
+#readonly-notice strong {
+  font-size: 16px;
+  color: var(--accent);
+}
+
+#readonly-notice p { margin-top: 4px; }
