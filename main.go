@@ -17,6 +17,7 @@ import (
 	"github.com/zpatronus/sidequests/internal/abracada"
 	"github.com/zpatronus/sidequests/internal/formulawar"
 	"github.com/zpatronus/sidequests/internal/identity"
+	"github.com/zpatronus/sidequests/internal/offercall"
 	"github.com/zpatronus/sidequests/internal/roomdb"
 	"github.com/zpatronus/sidequests/internal/secrethitler"
 	"github.com/zpatronus/sidequests/internal/undercover"
@@ -69,6 +70,7 @@ func mountGames(magic, hitler http.Handler) http.Handler {
 		http.Redirect(w, r, "/secret-hitler/", http.StatusMovedPermanently)
 	})
 	mux.Handle("/secret-hitler/", http.StripPrefix("/secret-hitler", hitler))
+	mux.Handle("/offer-call/", http.StripPrefix("/offer-call", offercall.Handler(os.Getenv("OFFER_CALL_SUPABASE_URL"), os.Getenv("OFFER_CALL_SUPABASE_SECRET_KEY"))))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok\n")) })
 	files, _ := fs.Sub(web, "web")
 	static := http.FileServer(http.FS(files))

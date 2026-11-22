@@ -3,6 +3,7 @@
 Small games and tools in one Go service, deployable anywhere that runs Go.
 
 - `/` — project home
+- `/offer-call/` — Offer Desk for recording compensation offers and comparing them
 - `/formula-war/` — Formula War
 - `/undercover/` — 谁是卧底: join a room, configure undercover/blank counts, and privately view cards. The host can start elimination votes. A confirmed vote is final, and an eliminated player’s role is revealed while their word stays private. Rooms expire after 15 minutes without a room request.
 - `/abracada/` — 出包魔法师，中文在线魔法推理桌游，2–5 人标准玩法、六人扩展，自绘 SVG、SSE、可添加机器人。
@@ -34,24 +35,6 @@ Set `SIDEQUESTS_DATA_DIR` to choose another directory, or `SIDEQUESTS_STORAGE=me
 ## Deployment
 
 Build with `go build -trimpath -o bin/server .` and run `./bin/server`. The server listens on `PORT` (default `8080`) and exposes `/healthz`. Go buildpacks using `go install .` produce a `sidequests` executable.
-
-### Render
-
-Use `render.yaml`, or configure a Go web service with:
-
-- Build: `go build -trimpath -o bin/server .`
-- Storage: `SIDEQUESTS_STORAGE=memory`
-- Start: `./bin/server`
-- Health check: `/healthz`
-- Root directory: leave empty
-
-For version-triggered releases, set Render's **Auto-Deploy → Off**. Save its **Settings → Deploy Hook** URL as a GitHub Actions secret:
-
-```sh
-gh secret set RENDER_DEPLOY_HOOK_URL --repo zpatronus/sidequests
-```
-
-Change `DEPLOY_VERSION`, commit, and push to `main`. The workflow runs tests and a build, then requests deployment of that exact commit. Check rollout status in Render.
 
 ### Deplexo
 
@@ -90,3 +73,13 @@ The Chinese adaptation in `internal/secrethitler/` is licensed under **CC BY-NC-
 - Seat order and the first starter are randomized once. Turns proceed counterclockwise; subsequent rounds start with the player who ended the previous round.
 - Original game: **Abracada...What?**, designed by Gary Kim. [Chinese rules reference](https://gameurlife.pixnet.net/blog/posts/10335625152) · [English rules reference](https://www.rulespal.com/abracada-what/rulebook).
 - Rules, UI and SVG illustrations are independently implemented. The counterclockwise sequence, subsequent-round starter and six-player supply follow this project's selected rules.
+
+## Offer Call cloud saves and sharing
+
+1. Run [the Offer Call SQL migration](internal/offercall/schema.sql) in the Supabase SQL Editor. It creates one table, `public.sidequests_offer_call_saves`, with a browser hash primary key, a unique share UUID, and a JSONB save. The SQL scopes all grants and revokes to that table.
+2. Set `OFFER_CALL_SUPABASE_URL` to your Supabase Project URL and `OFFER_CALL_SUPABASE_SECRET_KEY` to a server-side secret API key in the Sidequests service environment. Supabase's legacy service role key also works. The project Data API must be enabled and expose the `public` schema.
+3. Visit `/offer-call/`. Changes are stored locally and uploaded after five seconds without another edit. If you leave before sync completes, reopening Offer Call resumes any pending upload. Offer Call also works locally when cloud storage is unconfigured.
+
+The editor uses a private random credential stored in browser local storage for this origin. Clearing site data or switching browser profiles creates a new editor identity. To bring existing Offer Desk data from a different origin, export and import the JSON backup.
+
+The share button saves the current workspace and returns a stable, separate UUID link. Anyone with the link can see all offers, notes, and subsequent synced edits when they open or reload the page. The share link has read access only.

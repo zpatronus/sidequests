@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'"><meta name="viewport" content="width=device-width,initial-scale=1"><title>城市与缴费设置 · Offer Desk</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><div class="shell top"><div class="brand">Offer Desk</div><span id="sync-status" role="status"></span><a class="nav-link" href="index.html">返回 Offer</a></div></header>
+<main class="shell">
+  <div class="intro"><h1>城市与缴费设置</h1></div>
+  <div class="settings-layout">
+    <section class="panel">
+      <h2>城市参考与预算</h2>
+      <p class="settings-help">按城市查看政策，设置该城市的默认生活成本。</p>
+      <label class="field settings-select">查看城市 <select id="city"></select></label>
+      <section class="settings-section" aria-labelledby="policy-title">
+        <h3 id="policy-title">社保和公积金参考政策</h3>
+        <div id="policy"></div>
+      </section>
+      <section class="settings-section" aria-labelledby="cost-title">
+        <h3 id="cost-title">一居室与单人生活预算</h3>
+        <div id="cost-reference"></div>
+        <div class="grid-fields settings-select">
+          <label class="field">城市默认月租（元） <input id="rent-default" inputmode="text"></label>
+          <label class="field">城市默认其他月生活费（元） <input id="living-default" inputmode="text"></label>
+        </div>
+        <p class="settings-help">在 Offer 页选择此工作城市时，默认值会填入空白或为 0 的成本字段。</p>
+      </section>
+    </section>
+    <section class="panel">
+      <h2>单个 Offer 的实际缴费</h2>
+      <p class="settings-help">只有 HR 告知实际基数或比例时才需要填写。</p>
+      <label class="field settings-select">要修改的 Offer <select id="offer"></select></label>
+      <p id="offer-pay-city" class="settings-context"></p>
+      <form id="overrides" class="override-form"></form>
+    </section>
+  </div>
+  <p id="settings-status" role="status"></p>
+</main>
+<datalist id="city-options"></datalist>
+<script type="module" src="settings.mjs"></script>
+</body></html>

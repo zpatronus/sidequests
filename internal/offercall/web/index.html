@@ -1,0 +1,29 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'"><meta name="viewport" content="width=device-width, initial-scale=1"><title>薪酬对比 · Offer Desk</title><link rel="stylesheet" href="style.css"></head><body>
+<header><div class="shell top"><div class="brand">Offer Desk</div><div class="tools"><span id="saved">● 已保存到本机</span><button type="button" id="share">共享只读链接</button><a class="nav-link" href="settings.html">城市与缴费设置</a><button id="theme" aria-label="切换深色模式">◐</button><button id="report-open" class="primary">↓ 导出报告</button></div></div></header>
+<main class="shell" id="app"><div class="intro"><h1>薪酬记录与对比</h1></div>
+<nav id="tabs" aria-label="Offer 切换与排序，拖动标签或用 Alt 加方向键排序"></nav>
+<div class="workspace"><section class="panel entry"><div class="heading"><div><h2>快速录入</h2><p>留空表示未知，明确没有时填 0。</p></div><div class="entry-actions"><span class="tag" id="status"></span><button type="button" id="delete-offer" class="danger-text">删除 Offer</button></div></div><form id="fields" autocomplete="off"></form></section>
+<div class="results"><section class="panel summary"><div class="heading"><div><h2>实时测算</h2><p id="summary-context"></p></div><div class="year-tools"><div id="employment-years" aria-label="入职年度"></div><label id="sign-choice"><input type="checkbox" id="include-sign" checked> 首年含签字费</label><button id="unit" aria-label="切换金额单位">万元 ⇄</button></div></div><div id="metrics" class="metrics"></div><div id="metric-explanation"></div><section id="income-gaps" aria-labelledby="income-gaps-title" class="income-gaps" hidden><h3 id="income-gaps-title">税后收入差距</h3><div id="gap-cards" class="metrics"></div></section><div id="composition"></div></section><section class="panel notes"><div class="heading"><div><h2>通话记录</h2><p>记录报价、奖金口径、审批和下一次反馈。</p></div></div><textarea id="notes" aria-label="通话记录" placeholder="例如：HR 表示 18 薪，保底月数待确认……"></textarea></section></div></div>
+<section class="panel comparison"><div class="heading"><div><h2>Offer 对比</h2><p>收入和结余越高越绿，租金和生活成本越高越红。倍率只作用于浮动奖金，税后结余已扣除预计生活成本。</p></div></div><div id="table"></div></section>
+<footer><span>人民币 · 2026 年参考政策 · <a href="https://fgk.chinatax.gov.cn/zcfgk/c102416/c5211524/content.html" target="_blank" rel="noopener">个税政策</a></span><div><button id="import">导入 JSON</button> <button id="json">导出 JSON</button> <button id="csv">导出 CSV</button><input hidden type="file" id="file" accept=".json,application/json"></div></footer><p id="message" role="status"></p></main>
+<dialog id="export"><form method="dialog"><div class="heading"><h2>导出中文报告</h2><button aria-label="关闭">×</button></div><p>选择要纳入 Markdown 报告的 Offer。</p><div id="export-list"></div><p id="export-error" role="status"></p><button type="button" id="markdown" class="primary">下载 Markdown</button></form></dialog>
+<dialog id="import-dialog" aria-labelledby="import-title" aria-describedby="import-description">
+<form method="dialog">
+<h2 id="import-title">导入 JSON</h2>
+<p id="import-description"></p>
+<p>追加会保留现有记录。替换全部会删除当前 Offer 和通话记录，再载入备份。</p>
+<div class="dialog-actions"><button autofocus value="cancel">取消</button><button class="primary" value="append">追加</button><button class="danger" value="replace">替换全部</button></div>
+</form>
+</dialog>
+<dialog id="delete-dialog" aria-labelledby="delete-title" aria-describedby="delete-description">
+<form method="dialog">
+<h2 id="delete-title">删除 Offer</h2>
+<p id="delete-description"></p>
+<div class="dialog-actions"><button autofocus>取消</button><button type="button" id="delete-next" class="danger"></button></div>
+</form>
+</dialog>
+<aside id="comparison-chart" class="row-chart" aria-hidden="true" hidden></aside>
+<datalist id="city-options"></datalist>
+<datalist id="work-time-options"></datalist>
+<dialog id="share-dialog"><form method="dialog"><div class="heading"><h2>共享只读链接</h2><button aria-label="关闭">×</button></div><p>知道链接的人可以查看全部 Offer、通话记录和后续更新。</p><label for="share-url">只读链接</label><input id="share-url" type="url" readonly><button type="button" id="copy-share">复制链接</button><p id="share-status" role="status"></p></form></dialog>
+<script type="module" src="app.mjs"></script></body></html>
