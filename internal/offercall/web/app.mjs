@@ -528,17 +528,42 @@ window.addEventListener('pageshow',event=>{
 });
 
 window.addEventListener('hashchange',()=>location.reload());
-$('share').onclick=async()=>{
-  $('share').disabled=true;
+const shareButton=$('share');
+shareButton.onclick=async()=>{
+  const label=shareButton.getAttribute('aria-label');
+  const controls=[
+    $('app'),
+    document.querySelector('header .home-nav'),
+    ...[...shareButton.parentElement.children].filter(control=>control!==shareButton),
+  ];
+  for(const control of controls)control.inert=true;
+  shareButton.disabled=true;
+  shareButton.setAttribute('aria-busy','true');
+  shareButton.setAttribute('aria-label','正在生成链接…');
+  $('message').textContent='';
+  let link, savedLocally=false;
   try {
-    $('share-url').value=await cloud.share();
+    writeOffers(offers);
+    savedLocally=true;
+    link=await cloud.share(AbortSignal.timeout(10000));
+  } catch {
+    $('share-error-message').textContent=savedLocally
+      ? '所有记录均已保存在此浏览器中。请稍后再试。'
+      : '无法确认记录已保存到本机。请导出 JSON 备份。';
+  } finally {
+    shareButton.setAttribute('aria-label',label);
+    shareButton.removeAttribute('aria-busy');
+    shareButton.disabled=false;
+    for(const control of controls)control.inert=false;
+    shareButton.focus();
+  }
+  if(link){
+    $('share-url').value=link;
     $('share-status').textContent='';
     $('share-dialog').showModal();
     $('share-url').select();
-  } catch(error) {
-    $('message').textContent=error.message==='503'?'云端存储未配置。':'无法创建共享链接，请稍后重试。';
-  } finally {
-    $('share').disabled=false;
+  }else{
+    $('share-error-dialog').showModal();
   }
 };
 $('copy-share').onclick=async()=>{

@@ -2,7 +2,7 @@ import {readSetting, writeSetting, loadOffers, cityCostFields, cityCostOverrides
 import {encode} from './model.mjs';
 
 const pendingKey='cloud-pending';
-const delay=5000;
+const delay=2000;
 
 function browserID() {
   let id=readSetting('browser-id');
@@ -27,13 +27,13 @@ export async function readShare(id) {
 export function startCloud(onStatus=()=>{}) {
   let timer;
   let retryAfter=0;
-  const withLock=task=>navigator.locks ? navigator.locks.request('offer-call-cloud',task) : task();
+  const withLock=(task,signal)=>navigator.locks ? navigator.locks.request('offer-call-cloud',{signal},task) : task();
   const headers=()=>({Authorization:'Bearer '+browserID()});
-  const save=async()=>{
+  const save=async signal=>{
     const pending=readSetting(pendingKey);
     const snapshot=JSON.parse(encode(loadOffers()));
     snapshot.cityCosts=Object.fromEntries(cityCostFields.map(field=>[field,Object.fromEntries(cityCostOverrides(field))]));
-    await request('api/save',{method:'PUT',headers:{...headers(),'Content-Type':'application/json'},body:JSON.stringify(snapshot)});
+    await request('api/save',{method:'PUT',headers:{...headers(),'Content-Type':'application/json'},body:JSON.stringify(snapshot),signal});
     if(readSetting(pendingKey)===pending)writeSetting(pendingKey,'');
     onStatus(readSetting(pendingKey) ? '● 已保存到本机 · 等待同步' : '● 已同步');
   };
@@ -76,13 +76,13 @@ export function startCloud(onStatus=()=>{}) {
   schedule();
 
   return {
-    async share(){
+    async share(signal){
       return withLock(async()=>{
-        await save();
-        const response=await request('api/share',{method:'POST',headers:headers()});
+        await save(signal);
+        const response=await request('api/share',{method:'POST',headers:headers(),signal});
         const {uuid}=await response.json();
         return new URL('./#share='+uuid,document.baseURI).href;
-      });
+      },signal);
     },
   };
 }

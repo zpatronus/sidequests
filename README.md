@@ -78,7 +78,7 @@ The Chinese adaptation in `internal/secrethitler/` is licensed under **CC BY-NC-
 
 1. Run [the Offer Call SQL migration](internal/offercall/schema.sql) in the Supabase SQL Editor. It creates one table, `public.sidequests_offer_call_saves`, with a browser hash primary key, a unique share UUID, and a JSONB save. The SQL scopes all grants and revokes to that table.
 2. Set `OFFER_CALL_SUPABASE_URL` to your Supabase Project URL and `OFFER_CALL_SUPABASE_SECRET_KEY` to a server-side secret API key in the Sidequests service environment. Supabase's legacy service role key also works. The project Data API must be enabled and expose the `public` schema.
-3. Visit `/offer-call/`. Changes are stored locally and uploaded after five seconds without another edit. If you leave before sync completes, reopening Offer Call resumes any pending upload. Offer Call also works locally when cloud storage is unconfigured.
+3. Visit `/offer-call/`. Changes are stored locally and uploaded after two seconds without another edit. If you leave before sync completes, reopening Offer Call resumes any pending upload. Offer Call also works locally when cloud storage is unconfigured.
 
 The editor uses a private random credential stored in browser local storage for this origin. Clearing site data or switching browser profiles creates a new editor identity. To bring existing Offer Desk data from a different origin, export and import the JSON backup.
 
