@@ -85,3 +85,7 @@ The editor uses a private random credential stored in browser local storage for 
 The share button saves the current workspace and returns a stable, separate UUID link. Anyone with the link can see all offers, notes, and subsequent synced edits when they open or reload the page. The share link has read access only.
 
 Offer Call payroll presets adapt the [city-salary payroll reference](https://github.com/weante/city-salary/tree/2f1be4ff07c36206430d4d02035e30f7c1bf21c1) under the [MIT license](internal/offercall/web/data/city-payroll-LICENSE.txt). City settings link to the source records and mark provisional values.
+
+## Machine dashboard
+
+The unlisted `/dashboard` refreshes system, process, and network readings every five seconds. On Linux it reads the interfaces visible to the service. To include interface IP and MAC addresses, set `DASHBOARD_PASSWORD` on the server, restart, and sign in over HTTPS with username `dashboard` and that password. Setting the password protects both the dashboard page and its metrics route.

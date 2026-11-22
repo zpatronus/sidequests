@@ -100,3 +100,43 @@ func TestNetworkRatesAndCounterReset(t *testing.T) {
 		t.Fatal("missing counters should be unavailable")
 	}
 }
+
+func TestInterfaceAddressesRequireDashboardPassword(t *testing.T) {
+	for _, password := range []string{"", "test-password"} {
+		mux := http.NewServeMux()
+		register(mux, password)
+		for _, path := range []string{"/dashboard", "/dashboard/metrics"} {
+			request := httptest.NewRequest(http.MethodGet, path, nil)
+			if password != "" {
+				w := httptest.NewRecorder()
+				mux.ServeHTTP(w, request)
+				if w.Code != http.StatusUnauthorized || w.Header().Get("WWW-Authenticate") == "" {
+					t.Fatalf("%s accepted unauthenticated request: %d", path, w.Code)
+				}
+				request.SetBasicAuth("dashboard", password)
+			}
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, request)
+			if w.Code != http.StatusOK {
+				t.Fatalf("%s returned %d", path, w.Code)
+			}
+			if path != "/dashboard/metrics" {
+				continue
+			}
+			var data snapshot
+			if err := json.Unmarshal(w.Body.Bytes(), &data); err != nil {
+				t.Fatal(err)
+			}
+			if data.AddressesIncluded != (password != "") {
+				t.Fatalf("incorrect address disclosure mode: %s", w.Body)
+			}
+			if password == "" {
+				for _, iface := range data.Interfaces {
+					if iface.MAC != "" || len(iface.Addresses) != 0 || !strings.HasPrefix(iface.Name, "Interface ") {
+						t.Fatalf("public metrics disclosed interface addresses: %+v", iface)
+					}
+				}
+			}
+		}
+	}
+}

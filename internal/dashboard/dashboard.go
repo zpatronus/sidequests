@@ -1,6 +1,8 @@
 package dashboard
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
 	"embed"
 	"encoding/json"
 	"io/fs"
@@ -26,34 +28,55 @@ type systemMemory struct {
 }
 
 type snapshot struct {
-	SampledAt     time.Time `json:"sampledAt"`
-	CPUModel      string    `json:"cpuModel"`
-	OS            string    `json:"os"`
-	OSRelease     string    `json:"osRelease"`
-	Kernel        string    `json:"kernel"`
-	Architecture  string    `json:"architecture"`
-	GoVersion     string    `json:"goVersion"`
-	ResidentKiB   *uint64   `json:"residentKiB"`
-	ProcessCPU    *float64  `json:"processCPU"`
-	cpuTime       *time.Duration
-	Network       *networkSample `json:"network"`
-	network       map[string]networkCounters
-	CPUs          int           `json:"cpus"`
-	Load          *[3]float64   `json:"load"`
-	Memory        *systemMemory `json:"memory"`
-	SystemUptime  *float64      `json:"systemUptime"`
-	ProcessUptime float64       `json:"processUptime"`
-	HeapBytes     uint64        `json:"heapBytes"`
-	Goroutines    int           `json:"goroutines"`
+	Interfaces        []interfaceDetails `json:"interfaces"`
+	AddressesIncluded bool               `json:"addressesIncluded"`
+	SampledAt         time.Time          `json:"sampledAt"`
+	CPUModel          string             `json:"cpuModel"`
+	OS                string             `json:"os"`
+	OSRelease         string             `json:"osRelease"`
+	Kernel            string             `json:"kernel"`
+	Architecture      string             `json:"architecture"`
+	GoVersion         string             `json:"goVersion"`
+	ResidentKiB       *uint64            `json:"residentKiB"`
+	ProcessCPU        *float64           `json:"processCPU"`
+	cpuTime           *time.Duration
+	Network           *networkSample `json:"network"`
+	network           map[string]networkCounters
+	CPUs              int           `json:"cpus"`
+	Load              *[3]float64   `json:"load"`
+	Memory            *systemMemory `json:"memory"`
+	SystemUptime      *float64      `json:"systemUptime"`
+	ProcessUptime     float64       `json:"processUptime"`
+	HeapBytes         uint64        `json:"heapBytes"`
+	Goroutines        int           `json:"goroutines"`
 }
 
 func Register(mux *http.ServeMux) {
+	register(mux, os.Getenv("DASHBOARD_PASSWORD"))
+}
+
+func register(mux *http.ServeMux, password string) {
+	credentials := sha256.Sum256([]byte(password))
+	protect := func(next http.HandlerFunc) http.HandlerFunc {
+		return dashboardHeaders(func(w http.ResponseWriter, r *http.Request) {
+			if password != "" {
+				user, secret, ok := r.BasicAuth()
+				provided := sha256.Sum256([]byte(secret))
+				if !ok || user != "dashboard" || subtle.ConstantTimeCompare(provided[:], credentials[:]) != 1 {
+					w.Header().Set("WWW-Authenticate", `Basic realm="Sidequests dashboard"`)
+					http.Error(w, "Dashboard authentication required", http.StatusUnauthorized)
+					return
+				}
+			}
+			next(w, r)
+		})
+	}
 	files, _ := fs.Sub(assets, "web")
 	static := http.FileServer(http.FS(files))
 	var mu sync.Mutex
 	var latest snapshot
 	cpuModel, osRelease, kernel := systemIdentity()
-	mux.HandleFunc("GET /dashboard", dashboardHeaders(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /dashboard", protect(func(w http.ResponseWriter, r *http.Request) {
 		page, _ := assets.ReadFile("web/index.html")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write(page)
@@ -61,13 +84,15 @@ func Register(mux *http.ServeMux) {
 	for _, name := range []string{"dashboard.js", "dashboard.css"} {
 		mux.HandleFunc("GET /dashboard/"+name, dashboardHeaders(http.StripPrefix("/dashboard", static).ServeHTTP))
 	}
-	mux.HandleFunc("GET /dashboard/metrics", dashboardHeaders(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /dashboard/metrics", protect(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		if time.Since(latest.SampledAt) >= 5*time.Second {
 			next := collect("/proc")
 			next.CPUModel, next.OSRelease, next.Kernel = cpuModel, osRelease, kernel
 			next.ProcessCPU = cpuPercent(latest, next)
 			next.Network = measureNetwork(latest.network, next.network, next.SampledAt.Sub(latest.SampledAt))
+			next.AddressesIncluded = password != ""
+			next.Interfaces = describeInterfaces(next.network, next.AddressesIncluded)
 			latest = next
 		}
 		data := latest

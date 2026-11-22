@@ -1,3 +1,10 @@
+const colorScheme = matchMedia('(prefers-color-scheme: dark)');
+function applyTheme() {
+  document.documentElement.dataset.theme = colorScheme.matches ? 'dark' : 'light';
+}
+applyTheme();
+colorScheme.addEventListener('change', applyTheme);
+
 const interval = 5000;
 const statusMessage = document.getElementById('status');
 let lastSample;
@@ -45,6 +52,55 @@ const formats = {
 
 const updated = document.getElementById('updated');
 
+function renderInterfaces(interfaces, addressesIncluded) {
+  const target = document.getElementById('interfaces');
+  if (!interfaces?.length) {
+    const message = document.createElement('p');
+    message.textContent = 'Interface details unavailable';
+    target.replaceChildren(message);
+    return;
+  }
+  const grid = document.createElement('div');
+  grid.className = 'interface-grid';
+  const number = new Intl.NumberFormat();
+  for (const iface of interfaces) {
+    const card = document.createElement('article');
+    card.className = 'interface';
+    const title = document.createElement('h3');
+    title.textContent = iface.name;
+    const details = document.createElement('dl');
+    details.className = 'identity';
+    const add = (label, value, className) => {
+      const item = document.createElement('div');
+      if (className) item.className = className;
+      const term = document.createElement('dt');
+      const data = document.createElement('dd');
+      term.textContent = label;
+      data.textContent = value ?? 'Unavailable';
+      item.append(term, data);
+      details.append(item);
+    };
+    add('State', iface.state);
+    add('MTU', iface.mtu);
+    add('Link speed', iface.speedMbps == null ? null : iface.speedMbps + ' Mb/s');
+    if (addressesIncluded) {
+      add('MAC address', iface.mac || null);
+      add('IP addresses', iface.addresses?.join(' · ') || null, 'addresses');
+    }
+    if (iface.traffic) {
+      add('Received / sent', dataSize(iface.traffic.received) + ' / ' + dataSize(iface.traffic.sent));
+      for (const field of ['Packets', 'Errors', 'Drops']) {
+        const received = iface.traffic['receive' + field];
+        const sent = iface.traffic['send' + field];
+        add(field + ' received / sent', number.format(received) + ' / ' + number.format(sent));
+      }
+    }
+    card.append(title, details);
+    grid.append(card);
+  }
+  target.replaceChildren(grid);
+}
+
 async function refresh() {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 4000);
@@ -67,6 +123,7 @@ async function refresh() {
       const value = readings[id];
       document.getElementById(id).textContent = value == null || value === '' ? 'Unavailable' : format(value);
     }
+    renderInterfaces(sample.interfaces, sample.addressesIncluded);
     lastSample = timestamp;
     if (!updated.textContent || failing) statusMessage.textContent = 'Refreshes every 5 seconds';
     updated.dateTime = timestamp.toISOString();
