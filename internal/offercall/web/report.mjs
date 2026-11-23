@@ -51,9 +51,14 @@ export function reportMarkdown(offers, scenario, date=new Date(), options={}) {
     lines.push('## '+escape(name(offer)),'',escape([offer.role,offer.level,offer.city,offer.status].filter(Boolean).join(' · ')),'',
       ...fields.map(([label,value])=>'- '+label+' '+money(value)),
       ...factorLines,
-      '- 个税 '+money(r.tax)+'（'+r.taxMethod+'）',
-      '- 基本减除费用 '+money(r.basicDeduction)+' · 专项附加扣除 '+(r.deduction===null?'未填写，本次按 0 计':money(r.deduction))+' · 综合所得应纳税所得额 '+money(r.comprehensiveTaxable),
-      '- 个人社保 '+money(r.social)+' · 个人公积金 '+money(r.fund)+'（可税前扣除 '+money(r.deductibleFund)+'） · 公司社保 '+money(r.companySocial),
+      ...(r.usTaxYear!==null ? (r.usTax ? [
+        '- '+r.usTax.year+' 年联邦所得税 '+money(r.usTax.incomeTax)+' · 州所得税 '+money(r.usTax.stateTax)+' · 地方税 '+money(r.usTax.localTax),
+        '- Social Security '+money(r.usTax.socialSecurity)+' · Medicare '+money(r.usTax.medicare)+' · 地方法定缴费 '+money(r.usTax.regionalPayroll),
+      ] : ['- 美国税后估算待补充收入、税年或汇率。']) : [
+        '- 个税 '+money(r.tax)+'（'+r.taxMethod+'）',
+        '- 基本减除费用 '+money(r.basicDeduction)+' · 专项附加扣除 '+(r.deduction===null?'未填写，本次按 0 计':money(r.deduction))+' · 综合所得应纳税所得额 '+money(r.comprehensiveTaxable),
+        '- 个人社保 '+money(r.social)+' · 个人公积金 '+money(r.fund)+'（可税前扣除 '+money(r.deductibleFund)+'） · 公司社保 '+money(r.companySocial),
+      ]),
       '', '### 通话记录','',notesBlock(offer.notes),
       '', '### 计算假设','',...r.assumptions.map(item=>'- '+escape(item)),'');
   }

@@ -27,3 +27,22 @@ export function usdToRmb(value,rate) {
   if(number===null || number/rate>1e12)return null;
   return String(Number((number/rate).toFixed(2)));
 }
+
+// Session preferences are independent of offer records and comparison exports.
+export function currencySession(storage,scope) {
+  const prefix='offer-call-currency:'+scope+':';
+  const memory=new Map();
+  return {
+    isUSD(key){
+      if(memory.has(key))return memory.get(key);
+      try{return storage?.getItem(prefix+key)==='USD';}catch{return false;}
+    },
+    setUSD(key,enabled){
+      memory.set(key,enabled);
+      try {
+        if(enabled)storage?.setItem(prefix+key,'USD');
+        else storage?.removeItem(prefix+key);
+      }catch{ /* In-session memory also works when storage is unavailable. */ }
+    },
+  };
+}

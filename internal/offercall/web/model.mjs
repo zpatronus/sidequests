@@ -1,3 +1,4 @@
+import {estimateUSTax} from './us-tax.mjs';
 import {cityName,isUSCity} from './cities.mjs';
 import {amount,hasMoneyUnit} from './numbers.mjs';
 export {amount} from './numbers.mjs';
@@ -58,10 +59,11 @@ function annualWorkHours(offer) {
   if(start===null||end===null||start===end||days===null||days<=0||days>7)return null;
   return ((end-start+1440)%1440)/60*days*52;
 }
-export function calculate(o, scenario='target', {employmentYear=1, includeSign=scenario!=='guarantee'}={}) {
+export function calculate(o, scenario='target', {employmentYear=1, includeSign=scenario!=='guarantee', cnyToUSD=null}={}) {
   const second=employmentYear===2;
   const special=o.firstYearSpecial==='yes';
-  const usOffer=isUSCity(o.city)||isUSCity(o.payCity);
+  const usCity=isUSCity(o.payCity)?cityName(o.payCity):isUSCity(o.city)?cityName(o.city):null;
+  const usOffer=usCity!==null;
   const policy = policyFor(o);
   const n = key => amount(o[key]);
   const rate = key => {const v=n(key); return v!==null && v<=100 ? v : null;};
@@ -134,6 +136,8 @@ export function calculate(o, scenario='target', {employmentYear=1, includeSign=s
   const taxableCash = sum(cash,taxableCompanyFund);
   const merged = taxableCash===null || taxableDeductions===null ? null : annualTax(taxableCash-taxableDeductions);
   const eligible = n('eligible');
+  const usTaxYear=usOffer?(year??YEAR+(second?1:0)):null;
+  const usTax=usOffer?estimateUSTax(usCity,cash,base,usTaxYear,cnyToUSD):null;
   const availableBonus = fixedOnly ? 0 : sum(guaranteedBonus,multiply(variable,factor),regularOnly?0:(extra??0));
   const canSplit = merged!==null && year!==null && Number.isInteger(year) && year>=2023 && year<=2027 &&
     o.qualification==='符合且本年度未使用' && eligible!==null && eligible>0 && availableBonus!==null && eligible<=availableBonus && eligible<=cash;
@@ -142,7 +146,7 @@ export function calculate(o, scenario='target', {employmentYear=1, includeSign=s
   const tax = useSplit ? split : merged;
   const splitBonus = useSplit ? eligible : 0;
   const comprehensiveTaxable = cash===null || taxableDeductions===null ? null : Math.max(0,taxableCash-splitBonus-taxableDeductions);
-  const net = tax===null ? null : cash-tax-social-fund;
+  const net = usOffer ? usTax?.net??null : tax===null ? null : cash-tax-social-fund;
   const partialTax = !usOffer && net===null && taxableCash!==null
     ? annualTax(taxableCash-basicDeduction-(social??0)-(deductibleFund??0)-(deduction??0))
     : null;
@@ -161,7 +165,8 @@ export function calculate(o, scenario='target', {employmentYear=1, includeSign=s
     : '保底奖金和目标浮动奖金各是多少？');
   if (!usOffer && (ordinary===null || n('fundBase')===null || (isShanghai && supplement===null))) warnings.push('公积金缴存比例和实际基数是多少？');
   if (!o.approval) warnings.push('目前报价是否还需要内部审批？');
-  const assumptions = usOffer ? ['美国城市支持税前收入和生活成本对比；美国税后到手待核算。'] : [
+  const assumptions = usOffer ? ['美国按在缴纳城市全年居住并工作的单身雇员、标准扣除及现金工资估算。计入联邦、州及地方工资税和常见法定缴费。',
+    '部分 2027 年州和地方参数沿用 2026 年参考值。公司福利扣款、退休计划和个人税收抵免另计。'] : [
     policy?.notes,
     policy?.medical && policy===POLICIES.深圳?'深圳按 2026 年下半年新入职参考值全年化估算。养老、职工医保一档和失业险分别取基数。失业费率暂按个人 0.2%、单位 0.8% 参考估算。手填社保基数或合计费率可覆盖。':'',
     socialBase===null || fundBase===null ? '可在公积金与社保设置中补充缺少的缴费基数。' :
@@ -178,7 +183,7 @@ export function calculate(o, scenario='target', {employmentYear=1, includeSign=s
     o.tax==='单独计税' && !canSplit?'单独计税条件尚未满足，本情景暂按并入综合所得估算。':'',
     '按完整年度测算，入职日和试用期仅记录。单位社保参考值含养老、医疗、失业，医疗按当地含生育口径；工伤等差异可手填覆盖。',
   ].filter(Boolean);
-  return {base,fixed,factorTarget,guaranteedBonus,guaranteed,variable,target,targetPackage:sum(target,sign??0,subsidy??0,extra??0,equity??0),cash,cashWithEquity,sign,equity,subsidy,extra,personalRate,personalExtra,companyRate,companyExtra,socialBase,medicalBase,unemploymentBase,fundBase,fund,companyFund,totalFund:sum(fund,companyFund),social,companySocial,merged,split,tax,taxMethod:useSplit?'全年一次性奖金单独计税':'并入综合所得',deductibleFund,taxableCompanyFund,basicDeduction,deduction,taxableDeductions,splitBonus,comprehensiveTaxable,net,partialNet,workHours,hourlyCash,hourlyNet,monthly:multiply(net,1/12),rent,living,costs,remaining,warnings:warnings.slice(0,3),assumptions};
+  return {base,fixed,factorTarget,guaranteedBonus,guaranteed,variable,target,targetPackage:sum(target,sign??0,subsidy??0,extra??0,equity??0),cash,cashWithEquity,sign,equity,subsidy,extra,personalRate,personalExtra,companyRate,companyExtra,socialBase,medicalBase,unemploymentBase,fundBase,fund,companyFund,totalFund:sum(fund,companyFund),social,companySocial,merged,split,tax,taxMethod:useSplit?'全年一次性奖金单独计税':'并入综合所得',deductibleFund,taxableCompanyFund,basicDeduction,deduction,taxableDeductions,splitBonus,comprehensiveTaxable,net,partialNet,usTaxYear,usTax,workHours,hourlyCash,hourlyNet,monthly:multiply(net,1/12),rent,living,costs,remaining,warnings:warnings.slice(0,3),assumptions};
 }
 export function encode(offers) {return JSON.stringify({version:OFFER_VERSION,offers},null,2);}
 export function decode(raw,{maxOffers=Infinity}={}) {

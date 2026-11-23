@@ -1,4 +1,5 @@
-import {bonusUnits,isMoneyField,usdInput,usdToRmb} from './currency.mjs';
+import {supportsUSFederalYear} from './us-tax.mjs';
+import {bonusUnits,currencySession,isMoneyField,usdInput,usdToRmb} from './currency.mjs';
 import {findCities,isUSCity} from './cities.mjs';
 import {readShare,startCloud} from './cloud.mjs';
 import {chooseImportMode,confirmReset} from './dialogs.mjs';
@@ -38,9 +39,16 @@ const cloud=readOnly?null:startCloud(text=>{$('saved').textContent=text;});
 let active=offers.some(o=>o.id===readSetting('active'))?readSetting('active'):offers[0].id;
 const scenario='target';
 let unit='万元', selectedMetric='';
-let usdQuote=null;
+let latestQuote=null, quoteRequest=null, quoteFailed=false;
+let sessionStorage;
+try{sessionStorage=window.sessionStorage;}catch{ /* Storage can be restricted. */ }
+const currencyPrefs=currencySession(sessionStorage,readOnly?'share:'+shareID:'editor');
+const offerKey=()=> 'offer:'+active;
+const offerQuote=()=>currencyPrefs.isUSD(offerKey())?latestQuote:null;
+const tableQuote=()=>currencyPrefs.isUSD('table')?latestQuote:null;
 let employmentYear=1, includeSign=true;
-const yearOptions=()=>({employmentYear,includeSign});
+const yearOptions=()=>({employmentYear,includeSign,cnyToUSD:latestQuote?.rate});
+const isUSOffer=o=>isUSCity(o.city)||isUSCity(o.payCity);
 const resultFor=offer=>calculate(applyCityCosts(offer,cityCosts),scenario,yearOptions());
 document.documentElement.dataset.theme=readSetting('theme') || 'light';
 function save() {
@@ -54,10 +62,13 @@ function roleLine(offer){
   const details=[offer.role,offer.level].map(value=>value?.trim()).filter(Boolean);
   return details.length?'<small class="offer-role">'+esc(details.join(' · '))+'</small>':'';
 }
-const amountUnit=(mode=unit)=>usdQuote?(mode==='元/小时'?'USD/小时':'USD'):mode;
-const scaleAmount=(value,mode)=>usdQuote?value*usdQuote.rate:value/(mode==='万元'?10000:1);
-const fmt=(value,mode=unit)=>value==null?'—':scaleAmount(value,mode)
-  .toLocaleString('zh-CN',{maximumFractionDigits:!usdQuote&&mode==='元'?0:2})+' '+amountUnit(mode);
+const amountUnit=(mode,quote)=>quote?(mode==='元/小时'?'USD/小时':'USD'):mode;
+const scaleAmount=(value,mode,quote)=>quote?value*quote.rate:value/(mode==='万元'?10000:1);
+const fmt=(value,mode=unit)=>{
+  const quote=offerQuote();
+  return value==null?'—':scaleAmount(value,mode,quote)
+    .toLocaleString('zh-CN',{maximumFractionDigits:!quote&&mode==='元'?0:2})+' '+amountUnit(mode,quote);
+};
 const workTimeFields=new Set(['workStart','workEnd']);
 const invalidTime=value=>value.trim()!==''&&minutesOfDay(value)===null;
 function nativeTime(value){
@@ -67,6 +78,7 @@ function nativeTime(value){
 }
 const group=(title,html)=>'<fieldset><legend>'+title+'</legend><div class="grid-fields">'+html+'</div></fieldset>';
 function cityCostPlaceholder(offer,key) {
+  const usdQuote=offerQuote();
   const value=cityCosts[key].get(cityName(offer.city));
   if(value===undefined)return key==='rent'?(usdQuote?'如 600':'如 4000'):'未知';
   return '城市默认 '+(usdQuote?usdInput(value,usdQuote.rate)+' USD':value+' 元')+'/月';
@@ -83,6 +95,7 @@ function resetField(offer,key) {
     ? '<button type="button" class="reset-field" data-reset="'+key+'" data-default="'+esc(defaultValue)+'">重置</button>' : '';
 }
 function field(o,k,{label=numeric[k]??k,options,placeholder='',type='text',suffix,wide=false,help}={}) {
+  const usdQuote=offerQuote();
   const value=o[k]??(k.startsWith('work')?defaults[k]:'')??'';
   const showUSD=usdQuote && isMoneyField(o,k);
   const shown=showUSD?usdInput(value,usdQuote.rate):value;
@@ -96,6 +109,7 @@ function field(o,k,{label=numeric[k]??k,options,placeholder='',type='text',suffi
 const options=(...items)=>items.map(v=>[v,v]);
 const empty=(label,...items)=>[['',label],...options(...items)];
 function renderFields() {
+  const usdQuote=offerQuote();
   const o=current();
   const f=(k,opts)=>field(o,k,opts);
   const special=o.firstYearSpecial==='yes';
@@ -126,17 +140,17 @@ function renderFields() {
     group('薪资信息',f('base',{placeholder:usdQuote?'如 8000':'如 5.5万'})+f('months',{placeholder:'未知'})+mode+f('sign',{label:'首年签字费',placeholder:'选填'})+specialControl+sharedBonus+(special?'':guarantee+hr))+
     yearFields+
     group('工作时间',f('workStart',{label:'开始时间',type:'time'})+f('workEnd',{label:'结束时间',type:'time'})+f('workDays',{placeholder:'如 5'}))+
-    group('公积金',f('fundRate',{placeholder:fundPlaceholder(o)}))+
+    '<div class="china-payroll">'+group('公积金',f('fundRate',{placeholder:fundPlaceholder(o)}))+'</div>'+
     group('生活成本',cityCostFields.map(key=>f(key,{placeholder:cityCostPlaceholder(o,key)})).join(''))+
-    '<p class="settings"><a href="settings.html">公积金与社保设置</a></p>'+
+    '<p class="settings china-payroll"><a href="settings.html">公积金与社保设置</a></p>'+
     '<details class="settings"><summary>个税设置</summary>'+
-    group('奖金税务',f('tax',{label:'奖金税务方式',help:[
+    group('收入年度',f('year'))+'<div class="china-payroll">'+group('奖金税务',f('tax',{label:'奖金税务方式',help:[
       '这个选项决定年终奖怎么扣个税，会影响预计到手金额。',
       '自动优化：奖金符合单独计税条件且已填写金额时，比较两种算法，取税额较低的结果。',
       '单独计税：将符合条件的那笔全年一次性奖金单独算税，其余收入照常算税。',
       '并入综合所得：奖金和工资合在一起，按全年收入计算个税。',
       '资格或金额不确定时，可以先选「自动优化」，系统会先把奖金和工资合并测算。',
-    ].join('\n\n'),options:empty('默认自动优化','自动优化','单独计税','并入综合所得')})+f('year')+f('qualification',{label:'单独计税资格',options:empty('请选择','待确认','符合且本年度未使用','不符合或已使用')})+f('eligible')+f('deduction'))+'</details>'+
+    ].join('\n\n'),options:empty('默认自动优化','自动优化','单独计税','并入综合所得')})+f('qualification',{label:'单独计税资格',options:empty('请选择','待确认','符合且本年度未使用','不符合或已使用')})+f('eligible')+f('deduction'))+'</div></details>'+
     '<details class="settings"><summary>更多设置</summary>'+
     group('报价与薪资',f('targetMonths',{placeholder:'如 18，保底未知可留空'})+f('equity')+f('subsidy')+f('extra'))+
     group('岗位与进度',f('role',{label:'岗位'})+f('level',{label:'职级'})+f('start',{label:'入职日期',type:'date'})+f('probation')+f('probationRate')+f('approval',{label:'审批状态',options:empty('待确认','需要审批','无需审批','审批通过')}))+
@@ -160,7 +174,7 @@ function chart(result,mode=unit) {
 }
 function comparisonNumber(value,mode){
   if(value===null)return '—';
-  const scaled=scaleAmount(value,mode);
+  const scaled=scaleAmount(value,mode,tableQuote());
   return (Math.abs(scaled)<.05?0:scaled)
     .toLocaleString('zh-CN',{minimumFractionDigits:1,maximumFractionDigits:1});
 }
@@ -176,7 +190,7 @@ function comparisonCells(values, mode, cost) {
 }
 function comparisonMetric(key,label,results,span=1,context='') {
   const mode=hourlyFields.has(key)?'元/小时':unit;
-  const heading='<th class="comparison-label" scope="row" colspan="'+span+'" data-chart-unit="'+amountUnit(mode)+
+  const heading='<th class="comparison-label" scope="row" colspan="'+span+'" data-chart-unit="'+amountUnit(mode,tableQuote())+
     '" data-chart-context="'+esc(context)+'" data-chart-cost="'+(key==='rent'||key==='costs')+'">'+esc(label)+'</th>';
   return heading+comparisonCells(results.map(r=>r[key]),mode,key==='rent'||key==='costs');
 }
@@ -192,7 +206,7 @@ const comparisonAmounts=[
 ];
 function comparisonTable() {
   const columnCount=offers.length+2;
-  const headers='<thead><tr><th scope="col">情景<small class="comparison-unit">单位 '+amountUnit()+'</small></th><th scope="col">指标</th>'+
+  const headers='<thead><tr><th scope="col">情景<small class="comparison-unit">单位 '+amountUnit(unit,tableQuote())+'</small></th><th scope="col">指标</th>'+
     offers.map(o=>'<th scope="col">'+esc(name(o))+roleLine(o)+'<small>'+esc([o.city,o.status].filter(Boolean).join(' · '))+'</small></th>').join('')+'</tr></thead>';
   const sectionTitle=title=>'<tr class="sign-row"><th colspan="'+columnCount+'" scope="rowgroup">'+title+'</th></tr>';
   const overviewResults=offers.map(resultFor);
@@ -201,7 +215,7 @@ function comparisonTable() {
     rows.map(([key,label])=>'<tr>'+comparisonMetric(key,label,overviewResults,2,overviewTitle)+'</tr>').join('')+'</tbody>';
   const groups=[[1,false,'首年 · 不含签字费'],[1,true,'首年 · 含签字费'],[2,false,'第二年 · 不含签字费']].map(([year,includeSign,title])=>{
     const detailRows=comparisonScenarios.flatMap(([scenario,label])=>{
-      const results=offers.map(o=>calculate(applyCityCosts(o,cityCosts),scenario,{employmentYear:year,includeSign}));
+      const results=offers.map(o=>calculate(applyCityCosts(o,cityCosts),scenario,{employmentYear:year,includeSign,cnyToUSD:latestQuote?.rate}));
       return comparisonAmounts.map(([key,metric],i)=>
         '<tr class="'+(i===0?'scenario-start':'')+'">'+
         (i===0?'<th class="comparison-label" rowspan="'+comparisonAmounts.length+'" aria-label="'+esc(label)+'">'+esc(label)+'</th>':'')+
@@ -259,13 +273,19 @@ window.addEventListener('scroll',hideComparisonChart,{passive:true});
 window.addEventListener('resize',hideComparisonChart);
 
 function renderResults() {
+  if((offers.some(isUSOffer)||currencyPrefs.isUSD(offerKey())||currencyPrefs.isUSD('table'))&&
+    !latestQuote&&!quoteRequest&&!quoteFailed){
+    fetchQuote().then(refreshQuotedViews,renderResults);
+  }
   const o=current(), r=resultFor(o);
   const p=policyFor(o);
-  const usOffer=isUSCity(o.city)||isUSCity(o.payCity);
+  const usOffer=isUSOffer(o);
+  $('fields').toggleAttribute('data-us-offer',usOffer);
   $('status').textContent=o.status||'未知';
-  $('summary-context').textContent=[name(o),employmentYear===2?'第二年':'首年',scenarios[scenario],usOffer?'美国城市 · 税前与生活成本':p?.provisional?'自动测算 · 部分缴费参数为参考值':p?YEAR+' 年参考参数':'缴费政策待补充'].join(' · ');
+  $('summary-context').textContent=[name(o),employmentYear===2?'第二年':'首年',scenarios[scenario],usOffer?'美国税后自动测算 · '+r.usTaxYear:p?.provisional?'自动测算 · 部分缴费参数为参考值':p?YEAR+' 年参考参数':'缴费政策待补充'].join(' · ');
   $('unit').textContent=unit+' ⇄';
-  $('unit').hidden=usdQuote!==null;
+  $('unit').hidden=offerQuote()!==null;
+  renderCurrencyControls();
   const peers=offers.filter(x=>x.id!==active).map(x=>[x,resultFor(x).net]);
   const differences=peers.map(([peer,value])=>[peer,r.net===null||value===null?null:r.net-value]);
   const signed=v=>v===null?'—':(v>0?'+':'')+fmt(v);
@@ -273,8 +293,8 @@ function renderResults() {
     r.social===null?'社保':'',
     r.fund===null?'公积金':'',
   ].filter(Boolean).join('和');
-  const netStatus=usOffer?'美国税后到手待核算':r.cash===null?'待补充税前现金收入':missingPayroll?'待补充'+missingPayroll+'缴费参数':'税前现金 '+fmt(r.cash);
-  const metrics=[
+  const netStatus=r.cash===null?'待补充税前现金收入':missingPayroll?'待补充'+missingPayroll+'缴费参数':'税前现金 '+fmt(r.cash);
+  let metrics=[
     ['guaranteed','保证税前年薪',r.guaranteed,r.fixed===null?'待补充固定工资':r.guaranteed===null?'已知固定年薪 '+fmt(r.fixed):o.status==='书面'||o.status==='口头'?'已确认录入':'按录入估算','固定工资 '+fmt(r.fixed)+' ＋ 保底奖金 '+fmt(r.guaranteedBonus)],
     ['target','目标税前年包',r.targetPackage,r.target===null?'待补充奖金或目标薪数':(employmentYear===2?'按第二年保底与绩效假设':'按首年绩效与签字费选项'),'目标经常性现金 '+fmt(r.target)+' ＋ 签字费 '+fmt(r.sign)+' ＋ 补贴、额外奖金和股权估值。'+(o.bonusMode==='factor'?' 按绩效系数计算的奖金 '+fmt(r.factorTarget)+'，其中超过保底的部分计为浮动。':'')],
     ['equity','年度股权估值',r.equity,r.equity===null?'可在更多设置填写':'按录入的年度估值','年度股权估值按填写金额列示。首年和第二年沿用同一年度估值。股权归属、变现和个税未纳入现金测算。'],
@@ -287,6 +307,18 @@ function renderResults() {
     ['totalFund','公积金总积累',r.totalFund,'含公司与个人','个人 '+fmt(r.fund)+' ＋ 单位 '+fmt(r.companyFund)+'。单列为资产积累。'],
     ['remaining','税后剩余现金',r.remaining,r.costs===null?'待补充生活成本':'扣除生活成本','税后现金 − 年租金 '+fmt(r.rent)+' − 其他年生活费 '+fmt(r.living)+'。'],
   ];
+  if(usOffer){
+    const taxStatus=r.cash===null?'待补充税前现金收入':!supportsUSFederalYear(r.usTaxYear)?'支持 2026、2027 税年':
+      !latestQuote?(quoteFailed?'汇率暂不可用':'正在获取汇率…'):'联邦、州和地方税及法定缴费';
+    const usTax=r.usTax;
+    metrics=metrics.filter(([key])=>!['companyFund','totalFund'].includes(key));
+    const netMetric=metrics.find(([key])=>key==='net');
+    netMetric.splice(1,4,'预计税后年收入',r.net,taxStatus,
+      '按 '+r.usTaxYear+' 年单身雇员、全年居住和标准扣除估算。'+(usTax?'联邦所得税 '+fmt(usTax.incomeTax)+
+      ' · Social Security '+fmt(usTax.socialSecurity)+' · Medicare '+fmt(usTax.medicare)+
+      ' · 州所得税 '+fmt(usTax.stateTax)+' · 地方税 '+fmt(usTax.localTax)+' · 地方法定缴费 '+fmt(usTax.regionalPayroll)+'。':'')+
+      '部分 2027 年州和地方参数沿用 2026 年参考值。');
+  }
   if(r.partialNet!==null){
     const netMetric=metrics.find(([key])=>key==='net');
     netMetric.splice(1,4,'税后现金参考',r.partialNet,'未扣 '+missingPayroll,
@@ -308,7 +340,11 @@ function renderResults() {
     '<div class="chart"><h3>现金薪资构成 <small>目标结构 · 已录入部分</small></h3>'+chart(r)+'</div>'+
     (hr>0?'<div class="quotes"><span>HR 报价 <b>'+fmt(hr)+'</b></span></div>':'')+
     (showHrGap?'<p class="reconcile quote-warning"><b>报价差异超过 1%</b> · 计算年包比 HR 报价'+(hrGap>0?'高':'低')+' '+fmt(Math.abs(hrGap))+'（'+Math.abs(hrGapPercent).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:3})+'%）。请核对报价包含的项目。</p>':'')+
-    '<details class="assumptions" '+(document.querySelector('.assumptions')?.open?'open':'')+'><summary>查看计算假设与社保</summary><p>个人社保 '+fmt(r.social)+' · 公司社保 '+fmt(r.companySocial)+' · '+((p?.medical||p?.unemployment)?'养老 / 医保 / 失业月基数 '+[r.socialBase,r.medicalBase,r.unemploymentBase].map(v=>fmt(v,'元')).join(' / '):'社保月基数 '+fmt(r.socialBase,'元'))+'</p>'+'<p><a href="settings.html">查看城市政策与缴费设置</a></p>'+'<ul>'+r.assumptions.map(a=>'<li>'+esc(a)+'</li>').join('')+'</ul></details>';
+    '<details class="assumptions" '+(document.querySelector('.assumptions')?.open?'open':'')+'><summary>查看计算假设'+(usOffer?'与税率':'与社保')+'</summary>'+
+    (usOffer
+      ? (r.usTax?.sources?.length?'<p>'+r.usTax.sources.map((source,index)=>'<a href="'+esc(source)+'" target="_blank" rel="noopener">州或地方来源 '+(index+1)+'</a>').join(' · ')+'</p>':'')
+      : '<p>个人社保 '+fmt(r.social)+' · 公司社保 '+fmt(r.companySocial)+' · '+((p?.medical||p?.unemployment)?'养老 / 医保 / 失业月基数 '+[r.socialBase,r.medicalBase,r.unemploymentBase].map(v=>fmt(v,'元')).join(' / '):'社保月基数 '+fmt(r.socialBase,'元'))+'</p><p><a href="settings.html">查看城市政策与缴费设置</a></p>')+
+    '<ul>'+r.assumptions.map(a=>'<li>'+esc(a)+'</li>').join('')+'</ul></details>';
   hideComparisonChart();
   $('table').innerHTML=comparisonTable();
 }
@@ -366,6 +402,7 @@ $('fields').addEventListener('keydown',e=>{
 
 const cityDialog=$('city-defaults-dialog');
 function renderCityDefaults() {
+  const usdQuote=offerQuote();
   const changes=cityCostChanges(current(),cityCosts);
   const city=cityName(current().city);
   $('city-defaults-title').textContent=city+' · 生活成本默认值';
@@ -407,6 +444,7 @@ $('fields').addEventListener('input',e=>{
   if(readOnly||!e.target.name)return;
   const offer=current();
   const field=e.target.name;
+  const usdQuote=offerQuote();
   const bonusUnit=bonusUnits[field];
   const raw=e.target.value;
   const explicitBonus=bonusUnit && (hasMoneyUnit(raw)||/\$|USD/i.test(raw));
@@ -468,6 +506,7 @@ $('fields').addEventListener('click',async e=>{
   const input=$('fields').elements[button.dataset.reset];
   const label=button.closest('.field').querySelector('.field-name').textContent;
   const key=button.dataset.reset;
+  const usdQuote=offerQuote();
   const value=button.dataset.default;
   const next=key==='fundRate'&&policyFor(current())?.supplementalFund?'普通 7%（补充比例由设置决定）':
     usdQuote&&isMoneyField(current(),key)?usdInput(value,usdQuote.rate)+' USD':value;
@@ -608,12 +647,24 @@ $('employment-years').onclick=e=>{
 };
 $('include-sign').onchange=e=>{includeSign=e.target.checked;renderResults();};
 $('unit').onclick=()=>{unit=unit==='万元'?'元':'万元';renderResults();};
-const currencySelect=$('currency');
-const currencyStatus=$('currency-status');
-currencySelect.value='CNY';
-function setCurrencyStatus(message) {
-  currencyStatus.textContent=message;
-  currencyStatus.hidden=message==='';
+const currencyControls=[
+  {button:$('offer-currency'),status:$('offer-currency-status'),key:offerKey},
+  {button:$('table-currency'),status:$('table-currency-status'),key:()=> 'table'},
+];
+function renderCurrencyControls() {
+  for(const {button,status,key} of currencyControls){
+    const wantsUSD=currencyPrefs.isUSD(key());
+    button.setAttribute('aria-checked',String(wantsUSD&&latestQuote!==null));
+    button.disabled=wantsUSD&&quoteRequest!==null&&!latestQuote;
+    status.textContent=!wantsUSD?'':latestQuote?
+      '1 CNY ≈ '+latestQuote.rate.toLocaleString('en-US',{maximumFractionDigits:6})+' USD · '+latestQuote.date+' 参考汇率':
+      quoteFailed?'暂时无法获取汇率，继续显示人民币。':'正在获取汇率…';
+    status.hidden=status.textContent==='';
+  }
+}
+function refreshQuotedViews() {
+  if(offerQuote())renderCurrency();
+  else renderResults();
 }
 function renderCurrency() {
   const open=[...$('fields').querySelectorAll('details')].map(detail=>detail.open);
@@ -621,16 +672,9 @@ function renderCurrency() {
   $('fields').querySelectorAll('details').forEach((detail,index)=>{detail.open=open[index]??false;});
   renderResults();
 }
-currencySelect.onchange=async()=>{
-  if(currencySelect.value==='CNY'){
-    usdQuote=null;
-    setCurrencyStatus('');
-    renderCurrency();
-    return;
-  }
-  currencySelect.disabled=true;
-  setCurrencyStatus('正在获取汇率…');
-  try {
+function fetchQuote() {
+  if(quoteRequest)return quoteRequest;
+  quoteRequest=(async()=>{
     const response=await fetch('https://api.frankfurter.dev/v2/rate/cny/usd',{
       signal:AbortSignal.timeout(6000),
       credentials:'omit',
@@ -640,18 +684,25 @@ currencySelect.onchange=async()=>{
     const quote=await response.json();
     if(quote.base!=='CNY'||quote.quote!=='USD'||!Number.isFinite(quote.rate)||quote.rate<=0||
       !/^\d{4}-\d{2}-\d{2}$/.test(quote.date))throw new Error('Invalid exchange rate');
-    usdQuote=quote;
-    setCurrencyStatus('1 CNY ≈ '+quote.rate.toLocaleString('en-US',{maximumFractionDigits:6})+
-      ' USD · '+quote.date+' 参考汇率');
-  }catch{
-    currencySelect.value='CNY';
-    usdQuote=null;
-    setCurrencyStatus('暂时无法获取汇率，继续显示人民币。');
-  }finally{
-    currencySelect.disabled=false;
-    renderCurrency();
-  }
-};
+    latestQuote=quote;
+    quoteFailed=false;
+    return quote;
+  })().catch(error=>{
+    quoteFailed=true;
+    throw error;
+  }).finally(()=>{quoteRequest=null;});
+  return quoteRequest;
+}
+for(const {button,key} of currencyControls){
+  button.onclick=()=>{
+    const target=key();
+    const enableUSD=!(currencyPrefs.isUSD(target)&&latestQuote);
+    currencyPrefs.setUSD(target,enableUSD);
+    if(enableUSD&&!latestQuote)quoteFailed=false;
+    if(target==='table')renderResults();
+    else renderCurrency();
+  };
+}
 
 $('theme').onclick=()=>{const root=document.documentElement;root.dataset.theme=root.dataset.theme==='dark'?'light':'dark';try{writeSetting('theme',root.dataset.theme);}catch{}};
 function download(filename,body,type) {

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {isMoneyField,usdInput,usdToRmb} from './currency.mjs';
+import {currencySession,isMoneyField,usdInput,usdToRmb} from './currency.mjs';
 import {decode,encode} from './model.mjs';
 
 test('USD display accepts RMB expressions and a USD edit produces a canonical RMB value',()=>{
@@ -25,4 +25,26 @@ test('only monetary fields and monetary bonuses are converted',()=>{
   for(const field of ['guaranteed','fundRate','workDays','months','personalFactor','year']) {
     assert.equal(isMoneyField(offer,field),false,field);
   }
+});
+
+
+test('offer and table choices are independent and persist only in the tab storage',()=>{
+  const values=new Map();
+  const storage={
+    getItem:key=>values.get(key),
+    setItem:(key,value)=>values.set(key,value),
+    removeItem:key=>values.delete(key),
+  };
+  const first=currencySession(storage,'editor');
+  first.setUSD('offer:a',true);
+  assert.equal(first.isUSD('offer:b'),false);
+  assert.equal(first.isUSD('table'),false);
+  first.setUSD('table',true);
+  const reload=currencySession(storage,'editor');
+  assert.equal(reload.isUSD('offer:a'),true);
+  assert.equal(reload.isUSD('table'),true);
+  reload.setUSD('offer:a',false);
+  assert.equal(reload.isUSD('table'),true);
+  assert.equal(currencySession(storage,'share:abc').isUSD('table'),false);
+  assert.equal(currencySession(null,'editor').isUSD('offer:a'),false);
 });

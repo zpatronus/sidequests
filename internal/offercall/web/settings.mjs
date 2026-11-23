@@ -34,7 +34,7 @@ function showPolicy(){
   const target=$('policy');
   const summary=document.createElement('p');
   summary.className='settings-context';
-  summary.textContent=isUSCity(name)?'美国城市支持生活成本参考。':policy?.provisional?'支持自动测算。部分参数为参考值，可按 Offer 覆盖。':'支持自动测算，可按 Offer 覆盖。';
+  summary.textContent=isUSCity(name)?'美国城市支持联邦、州和地方税后估算，并提供生活成本参考。':policy?.provisional?'支持自动测算。部分参数为参考值，可按 Offer 覆盖。':'支持自动测算，可按 Offer 覆盖。';
   target.replaceChildren(summary);
   const list=document.createElement('ul');
   for(const {label,range,source} of items){

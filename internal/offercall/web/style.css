@@ -260,20 +260,25 @@ dialog::backdrop{background:#0009}
 #city-defaults-list p { overflow-wrap: anywhere; }
 
 
-#currency {
-  font: inherit;
-  font-size: 12px;
-  color: var(--ink);
-  background: var(--paper);
+.currency-switch {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+  padding: 3px;
   border: 1px solid var(--line);
-  padding: 6px 8px;
+  border-radius: 999px;
+  background: var(--paper);
+  font-size: 12px;
+  font-weight: 650;
 }
+.currency-switch span { padding: 5px 8px; border-radius: inherit; }
+.currency-switch[aria-checked="false"] span:first-child,
+.currency-switch[aria-checked="true"] span:last-child {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.currency-switch:disabled { cursor: wait; opacity: .75; }
+#offer-currency-status, #table-currency-status { margin: -6px 0 10px; font-size: 12px; }
+.entry-actions { flex-wrap: wrap; justify-content: flex-end; }
 
-#currency-status { margin: -6px 0 10px; font-size: 12px; }
-
-#city-picker { width: min(540px, calc(100% - 28px)); }
-#city-search { width: 100%; padding: 9px; border: 1px solid var(--line); background: var(--soft); }
-#city-choices { max-height: min(46vh, 360px); overflow: auto; margin-top: 10px; }
-#city-choices section + section { margin-top: 12px; }
-.city-buttons { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
-.city-buttons button { min-height: 36px; }
+#fields[data-us-offer] .china-payroll { display: none; }
