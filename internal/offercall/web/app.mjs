@@ -1,3 +1,4 @@
+import {bonusUnits,isMoneyField,usdInput,usdToRmb} from './currency.mjs';
 import {findCities,isUSCity} from './cities.mjs';
 import {readShare,startCloud} from './cloud.mjs';
 import {chooseImportMode,confirmReset} from './dialogs.mjs';
@@ -67,8 +68,8 @@ function nativeTime(value){
 const group=(title,html)=>'<fieldset><legend>'+title+'</legend><div class="grid-fields">'+html+'</div></fieldset>';
 function cityCostPlaceholder(offer,key) {
   const value=cityCosts[key].get(cityName(offer.city));
-  if(value===undefined)return key==='rent'?'如 4000':'未知';
-  return '城市默认 '+value+' 元/月';
+  if(value===undefined)return key==='rent'?(usdQuote?'如 600':'如 4000'):'未知';
+  return '城市默认 '+(usdQuote?usdInput(value,usdQuote.rate)+' USD':value+' 元')+'/月';
 }
 function fundPlaceholder(offer){
   return policyFor(offer)?.supplementalFund?'留空按普通 7%＋补充 5% 测算':'留空按 12% 测算';
@@ -83,9 +84,12 @@ function resetField(offer,key) {
 }
 function field(o,k,{label=numeric[k]??k,options,placeholder='',type='text',suffix,wide=false,help}={}) {
   const value=o[k]??(k.startsWith('work')?defaults[k]:'')??'';
+  const showUSD=usdQuote && isMoneyField(o,k);
+  const shown=showUSD?usdInput(value,usdQuote.rate):value;
+  if(showUSD && !bonusUnits[k])label=label.replace(/（元）$/,'')+'（USD）';
   const reset=resetField(o,k);
   const content=options?'<select name="'+k+'">'+options.map(([v,l])=>'<option value="'+esc(v)+'" '+(value===v?'selected':'')+'>'+esc(l)+'</option>').join('')+'</select>':
-    '<input name="'+k+'" type="'+type+'" '+(workTimeFields.has(k)?'list="work-time-options" step="60" autocomplete="off" aria-invalid="'+invalidTime(value)+'" ':'')+(k in numeric?'inputmode="text" aria-invalid="'+invalidNumber(k,value)+'"':'')+' value="'+esc(workTimeFields.has(k)?nativeTime(value):value)+'" placeholder="'+esc(placeholder)+'">';
+    '<input name="'+k+'" type="'+type+'" '+(workTimeFields.has(k)?'list="work-time-options" step="60" autocomplete="off" aria-invalid="'+invalidTime(value)+'" ':'')+(k in numeric?'inputmode="text" aria-invalid="'+invalidNumber(k,value)+'"':'')+' value="'+esc(workTimeFields.has(k)?nativeTime(value):shown)+'" placeholder="'+esc(placeholder)+'">';
   const tooltip=help?'<span class="field-help" tabindex="0" aria-label="'+esc(label)+'说明" aria-describedby="help-'+k+'">?<span id="help-'+k+'" role="tooltip">'+esc(help)+'</span></span>':'';
   return '<label class="field '+(wide?'wide':'')+'"><span class="field-title"><span class="field-name">'+esc(label)+'</span>'+tooltip+'</span><span class="control">'+content+(suffix??'')+'</span>'+reset+'</label>';
 }
@@ -97,14 +101,14 @@ function renderFields() {
   const special=o.firstYearSpecial==='yes';
   const factorMode=o.bonusMode==='factor';
   const bonus=(k,u,label=numeric[k])=>{
-    const unit=o[u]??(u==='secondGu'?'元':'月');
-    return f(k,{label,placeholder:'未知',suffix:'<select name="'+u+'" aria-label="'+label+'单位"><option '+(unit==='月'?'selected':'')+'>月</option><option '+(unit==='元'?'selected':'')+'>元</option></select>'});
+    const unit=isMoneyField(o,k)?'元':'月';
+    return f(k,{label,placeholder:'未知',suffix:'<select name="'+u+'" aria-label="'+label+'单位"><option value="月" '+(unit==='月'?'selected':'')+'>月</option><option value="元" '+(unit==='元'?'selected':'')+'>'+(usdQuote?'USD':'元')+'</option></select>'});
   };
   const mode=f('bonusMode',{label:'奖金录入方式',options:[['direct','金额 / 月数'],['factor','基数 × 系数']],wide:true});
   const specialControl='<label class="wide check-field"><input type="checkbox" name="firstYearSpecial" '+(special?'checked':'')+'> 首年是否特殊</label>';
   const sharedBonus=factorMode
     ? ['bonusBase','companyFactor','departmentFactor','personalFactor','attendanceFactor']
-      .map(k=>f(k,{placeholder:k==='bonusBase'?'如 20万':'未知，1 表示 100%'})).join('')+
+      .map(k=>f(k,{placeholder:k==='bonusBase'?(usdQuote?'如 30000':'如 20万'):'未知，1 表示 100%'})).join('')+
       field({...o,performanceMultiplier:o.performanceMultiplier??'1'},'performanceMultiplier',{placeholder:'留空按 1',suffix:'<small class="field-hint">只乘超过保底的部分</small>'})
     : bonus('variable','vu');
   const guarantee=factorMode
@@ -119,7 +123,7 @@ function renderFields() {
     ? group('首年',guarantee+hr)+group('第二年',secondGuarantee)
     : '';
   $('fields').innerHTML=group('基本信息',f('company',{label:'公司名称'})+'<div class="city-field">'+f('city',{label:'工作城市',placeholder:'点击选择或输入城市'})+'<button type="button" id="city-defaults" aria-haspopup="dialog" hidden>查看城市默认值</button></div>'+f('status',{label:'Offer 状态',options:empty('未知','预估','口头','书面')}))+
-    group('薪资信息',f('base',{placeholder:'如 5.5万'})+f('months',{placeholder:'未知'})+mode+f('sign',{label:'首年签字费',placeholder:'选填'})+specialControl+sharedBonus+(special?'':guarantee+hr))+
+    group('薪资信息',f('base',{placeholder:usdQuote?'如 8000':'如 5.5万'})+f('months',{placeholder:'未知'})+mode+f('sign',{label:'首年签字费',placeholder:'选填'})+specialControl+sharedBonus+(special?'':guarantee+hr))+
     yearFields+
     group('工作时间',f('workStart',{label:'开始时间',type:'time'})+f('workEnd',{label:'结束时间',type:'time'})+f('workDays',{placeholder:'如 5'}))+
     group('公积金',f('fundRate',{placeholder:fundPlaceholder(o)}))+
@@ -366,7 +370,8 @@ function renderCityDefaults() {
   const city=cityName(current().city);
   $('city-defaults-title').textContent=city+' · 生活成本默认值';
   $('city-defaults-list').innerHTML=changes.map(({field,current,next})=>
-    '<li><div><strong>'+esc(numeric[field])+'</strong><p>从 '+esc(current||'空白')+' → '+esc(next)+' 元/月'+'</p></div>'+
+    '<li><div><strong>'+esc(numeric[field])+'</strong><p>从 '+esc(current?(usdQuote?usdInput(current,usdQuote.rate):current):'空白')+
+    ' → '+esc(usdQuote?usdInput(next,usdQuote.rate):next)+' '+(usdQuote?'USD':'元')+'/月</p></div>'+
     '<button type="button" data-city-cost="'+field+'" aria-label="替换'+esc(numeric[field])+'">替换</button></li>'
   ).join('');
 }
@@ -401,14 +406,37 @@ $('fields').addEventListener('submit',e=>e.preventDefault());
 $('fields').addEventListener('input',e=>{
   if(readOnly||!e.target.name)return;
   const offer=current();
-  offer[e.target.name]=e.target.name==='firstYearSpecial'?(e.target.checked?'yes':'no'):e.target.name==='fundRate'&&!e.target.value.trim()?null:e.target.value;
-  const bonusUnit={guaranteed:'gu',variable:'vu',secondGuarantee:'secondGu'}[e.target.name];
-  if(bonusUnit && hasMoneyUnit(e.target.value) && amount(e.target.value)!==null) {
-    current()[bonusUnit]='元';
+  const field=e.target.name;
+  const bonusUnit=bonusUnits[field];
+  const raw=e.target.value;
+  const explicitBonus=bonusUnit && (hasMoneyUnit(raw)||/\$|USD/i.test(raw));
+  const bonusField=Object.keys(bonusUnits).find(key=>bonusUnits[key]===field);
+  if(usdQuote&&bonusField){
+    const input=$('fields').elements[bonusField];
+    const converted=raw==='元'?usdToRmb(input.value,usdQuote.rate):input.value;
+    if(converted===null){
+      e.target.value=offer[field]??(field==='secondGu'?'元':'月');
+      input.setAttribute('aria-invalid','true');
+      return;
+    }
+    offer[bonusField]=converted;
+  }
+  if(usdQuote&&(explicitBonus||isMoneyField(offer,field))){
+    const value=usdToRmb(raw,usdQuote.rate);
+    if(value===null){
+      e.target.setAttribute('aria-invalid','true');
+      return;
+    }
+    offer[field]=value;
+  }else{
+    offer[field]=field==='firstYearSpecial'?(e.target.checked?'yes':'no'):field==='fundRate'&&!raw.trim()?null:raw;
+  }
+  if(explicitBonus && amount(offer[field])!==null) {
+    offer[bonusUnit]='元';
     $('fields').elements[bonusUnit].value='元';
   }
   if(workTimeFields.has(e.target.name))e.target.setAttribute('aria-invalid',String(invalidTime(e.target.value)));
-  if(e.target.name in numeric)e.target.setAttribute('aria-invalid',String(invalidNumber(e.target.name,e.target.value)));
+  if(e.target.name in numeric)e.target.setAttribute('aria-invalid',String(invalidNumber(field,offer[field])));
   if(['company','city','role','level'].includes(e.target.name))renderTabs();
   const refreshReset=input=>{
     const label=input.closest('.field');
@@ -439,9 +467,20 @@ $('fields').addEventListener('click',async e=>{
   if(readOnly||!button)return;
   const input=$('fields').elements[button.dataset.reset];
   const label=button.closest('.field').querySelector('.field-name').textContent;
-  const next=button.dataset.reset==='fundRate'&&policyFor(current())?.supplementalFund?'普通 7%（补充比例由设置决定）':button.dataset.default;
+  const key=button.dataset.reset;
+  const value=button.dataset.default;
+  const next=key==='fundRate'&&policyFor(current())?.supplementalFund?'普通 7%（补充比例由设置决定）':
+    usdQuote&&isMoneyField(current(),key)?usdInput(value,usdQuote.rate)+' USD':value;
   if(!await confirmReset(label,input.value,next))return;
-  input.value=button.dataset.reset==='fundRate'?'':button.dataset.default;
+  if(usdQuote&&isMoneyField(current(),key)){
+    current()[key]=value;
+    save();
+    renderFields();
+    renderResults();
+    $('fields').elements[key].focus();
+    return;
+  }
+  input.value=key==='fundRate'?'':value;
   input.dispatchEvent(new Event('input',{bubbles:true}));
   input.focus();
 });
@@ -576,11 +615,17 @@ function setCurrencyStatus(message) {
   currencyStatus.textContent=message;
   currencyStatus.hidden=message==='';
 }
+function renderCurrency() {
+  const open=[...$('fields').querySelectorAll('details')].map(detail=>detail.open);
+  renderFields();
+  $('fields').querySelectorAll('details').forEach((detail,index)=>{detail.open=open[index]??false;});
+  renderResults();
+}
 currencySelect.onchange=async()=>{
   if(currencySelect.value==='CNY'){
     usdQuote=null;
     setCurrencyStatus('');
-    renderResults();
+    renderCurrency();
     return;
   }
   currencySelect.disabled=true;
@@ -604,7 +649,7 @@ currencySelect.onchange=async()=>{
     setCurrencyStatus('暂时无法获取汇率，继续显示人民币。');
   }finally{
     currencySelect.disabled=false;
-    renderResults();
+    renderCurrency();
   }
 };
 
