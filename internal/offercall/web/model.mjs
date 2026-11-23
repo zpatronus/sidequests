@@ -1,3 +1,4 @@
+import {cityName,isUSCity} from './cities.mjs';
 import {amount,hasMoneyUnit} from './numbers.mjs';
 export {amount} from './numbers.mjs';
 import {POLICIES} from './data/city-policies.mjs';
@@ -40,7 +41,8 @@ export function prefillNumbers(offer) {
 }
 export const scenarios = {guarantee:'只看保证',target:'目标奖金',zero:'零浮动',high:'150% 浮动'};
 export function policyFor(o) {
-  const city=(o.payCity || o.city || '').trim().replace(/市$/,'');
+  if(isUSCity(o.city))return undefined;
+  const city=cityName(o.payCity)||cityName(o.city);
   return Object.hasOwn(POLICIES,city) ? POLICIES[city] : undefined;
 }
 export function minutesOfDay(input) {
@@ -59,6 +61,7 @@ function annualWorkHours(offer) {
 export function calculate(o, scenario='target', {employmentYear=1, includeSign=scenario!=='guarantee'}={}) {
   const second=employmentYear===2;
   const special=o.firstYearSpecial==='yes';
+  const usOffer=isUSCity(o.city)||isUSCity(o.payCity);
   const policy = policyFor(o);
   const n = key => amount(o[key]);
   const rate = key => {const v=n(key); return v!==null && v<=100 ? v : null;};
@@ -110,8 +113,8 @@ export function calculate(o, scenario='target', {employmentYear=1, includeSign=s
     };
     return (monthly(ordinaryRate)+monthly(supplementRate))*12;
   };
-  const fund = annualFund(fundBase,personalRate,personalExtra);
-  const companyFund = annualFund(fundBase,companyRate,companyExtra);
+  const fund = usOffer ? null : annualFund(fundBase,personalRate,personalExtra);
+  const companyFund = usOffer ? null : annualFund(fundBase,companyRate,companyExtra);
   const taxFundBase = fundBase===null || !policy?.fund ? fundBase : Math.min(fundBase,policy.fund[1]);
   const approvedFund = (ordinaryRate,supplementRate)=>annualFund(taxFundBase,Math.min(12,ordinaryRate),Math.min(supplementRate,Math.max(0,12-ordinaryRate)));
   const deductibleFund = fund===null ? null : Math.min(fund,approvedFund(personalRate,personalExtra));
@@ -122,8 +125,8 @@ export function calculate(o, scenario='target', {employmentYear=1, includeSign=s
   const payrollSocial = (override, rates) => override!==null
     ? multiply(socialBase,override*.01)
     : rates ? sum(...rates.map((rate,i)=>multiply(socialBases[i],rate*.01))) : null;
-  const social = socialBase===0 ? 0 : multiply(sum(payrollSocial(rate('socialRate'),policy?.employee),n('socialFixed')??policy?.fixed??(rate('socialRate')!==null?0:null)),12);
-  const companySocial = multiply(payrollSocial(rate('employerSocial'),policy?.employer),12);
+  const social = usOffer ? null : socialBase===0 ? 0 : multiply(sum(payrollSocial(rate('socialRate'),policy?.employee),n('socialFixed')??policy?.fixed??(rate('socialRate')!==null?0:null)),12);
+  const companySocial = usOffer ? null : multiply(payrollSocial(rate('employerSocial'),policy?.employer),12);
   const deduction = n('deduction');
   const basicDeduction = 60000;
   const taxableDeductions = sum(basicDeduction,social,deductibleFund,deduction??0);
@@ -140,7 +143,7 @@ export function calculate(o, scenario='target', {employmentYear=1, includeSign=s
   const splitBonus = useSplit ? eligible : 0;
   const comprehensiveTaxable = cash===null || taxableDeductions===null ? null : Math.max(0,taxableCash-splitBonus-taxableDeductions);
   const net = tax===null ? null : cash-tax-social-fund;
-  const partialTax = net===null && taxableCash!==null
+  const partialTax = !usOffer && net===null && taxableCash!==null
     ? annualTax(taxableCash-basicDeduction-(social??0)-(deductibleFund??0)-(deduction??0))
     : null;
   const partialNet = partialTax===null ? null : cash-partialTax-(social??0)-(fund??0);
@@ -156,9 +159,9 @@ export function calculate(o, scenario='target', {employmentYear=1, includeSign=s
   if (guaranteedBonus===null || variable===null) warnings.push(byFactor
     ? '奖金基数、首年保底系数和目标绩效系数分别是多少？'
     : '保底奖金和目标浮动奖金各是多少？');
-  if (ordinary===null || n('fundBase')===null || (isShanghai && supplement===null)) warnings.push('公积金缴存比例和实际基数是多少？');
+  if (!usOffer && (ordinary===null || n('fundBase')===null || (isShanghai && supplement===null))) warnings.push('公积金缴存比例和实际基数是多少？');
   if (!o.approval) warnings.push('目前报价是否还需要内部审批？');
-  const assumptions = [
+  const assumptions = usOffer ? ['美国城市支持税前收入和生活成本对比；美国税后到手待核算。'] : [
     policy?.notes,
     policy?.medical && policy===POLICIES.深圳?'深圳按 2026 年下半年新入职参考值全年化估算。养老、职工医保一档和失业险分别取基数。失业费率暂按个人 0.2%、单位 0.8% 参考估算。手填社保基数或合计费率可覆盖。':'',
     socialBase===null || fundBase===null ? '可在公积金与社保设置中补充缺少的缴费基数。' :

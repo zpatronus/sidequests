@@ -1,8 +1,9 @@
 import {startCloud} from './cloud.mjs';
 import {confirmReset} from './dialogs.mjs';
 import {cityCostReferences} from './data/city-costs.mjs';
+import {CITY_CHOICES,isUSCity} from './cities.mjs';
 import {invalidNumber} from './numbers.mjs';
-import {CITIES,CITY_REFERENCES,POLICIES} from './data/city-policies.mjs';
+import {CITY_REFERENCES,POLICIES} from './data/city-policies.mjs';
 import {calculate,numeric,policyFor} from './model.mjs';
 import {cityCostFields,cityCostOverrides,cityCostSettings,cityName,loadOffers,readSetting,writeOffers,writeSetting} from './storage.mjs';
 
@@ -17,8 +18,8 @@ const fieldGroups=[
 const selected=()=>offers[Number($('offer').value)];
 const status=message=>{$('settings-status').textContent=message;};
 document.documentElement.dataset.theme=readSetting('theme')||'light';
-for(const {name,province} of CITIES){
-  $('city').add(new Option(province===name?name:province+' · '+name,name));
+for(const {name,region,us} of CITY_CHOICES){
+  $('city').add(new Option(us?name+' · '+region:region===name?name:region+' · '+name,name));
   const option=document.createElement('option');
   option.value=name;
   $('city-options').append(option);
@@ -33,7 +34,7 @@ function showPolicy(){
   const target=$('policy');
   const summary=document.createElement('p');
   summary.className='settings-context';
-  summary.textContent=policy?.provisional?'支持自动测算。部分参数为参考值，可按 Offer 覆盖。':'支持自动测算，可按 Offer 覆盖。';
+  summary.textContent=isUSCity(name)?'美国城市支持生活成本参考。':policy?.provisional?'支持自动测算。部分参数为参考值，可按 Offer 覆盖。':'支持自动测算，可按 Offer 覆盖。';
   target.replaceChildren(summary);
   const list=document.createElement('ul');
   for(const {label,range,source} of items){

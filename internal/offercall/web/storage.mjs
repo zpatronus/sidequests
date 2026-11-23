@@ -1,3 +1,5 @@
+import {cityName} from './cities.mjs';
+export {cityName} from './cities.mjs';
 import {cityCostReferences} from './data/city-costs.mjs';
 import {amount,decode,defaults,encode,prefillNumbers} from './model.mjs';
 
@@ -34,7 +36,6 @@ function markChanged() {
 }
 export const cityCostFields=['rent','living'];
 export const cityCostSettings={rent:'city-rent',living:'city-living'};
-export const cityName=value=>(value||'').trim().replace(/市$/,'');
 
 export function cityCostOverrides(field) {
   try {return new Map(Object.entries(JSON.parse(readSetting(cityCostSettings[field])||'{}')));}

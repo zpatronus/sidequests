@@ -1,3 +1,5 @@
+import {US_CITIES} from './us-cities.mjs';
+
 // Rounded monthly planning values in CNY. Rent is a whole one-bedroom home.
 const rentIndex='https://www.cih-index.com/data/index/rentIndex.html';
 const octoberBudget='https://www.dh-realting.com/en/insights/cost-of-living-in-china-monthly-budget-rent-and-expenses';
@@ -76,8 +78,17 @@ const livingcostEstimates = {
   克拉玛依:['karamay',1100,2300],
 };
 
+// Convert source budgets at the published 2026-11-23 CNY/USD reference rate.
+// Keep preset and persisted values in CNY, independent of the display switch.
+const usReferenceRate=0.14996;
+
 export const cityCostReferences = {
   ...existingReferences,
+  ...Object.fromEntries(US_CITIES.map(({name,rentUSD,livingUSD,source})=>[name,{
+    rent:Math.round(rentUSD/usReferenceRate),
+    living:Math.round(livingUSD/usReferenceRate),
+    rentUSD,livingUSD,modeled:true,rentSource:source,livingSource:source,
+  }])),
   ...Object.fromEntries(Object.entries(livingcostEstimates).map(([city,[slug,rent,living]])=>{
     const source='https://livingcost.org/cost/china/'+slug;
     return [city,{rent,living,rentSource:source,livingSource:source,modeled:true}];
