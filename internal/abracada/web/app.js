@@ -8,6 +8,8 @@ const reconnectInterval=3_000;
 let requestInFlight=false, disconnectTimer, reconnectTimer, resumeInFlight=false;
 const reloadDialog=$('reload-dialog');
 const loadingDialog=$('request-loading');
+const requestQuips=['正在翻咒语书…','给魔杖充个电…','猫头鹰正在跑腿…','拜托魔法石配合一下…','火球再小一点…','这次应该不会出包…'];
+let nextRequestQuip=0;
 
 function askReload(title,detail,reason='request'){
  if(reloadDialog.open&&reloadDialog.dataset.reason==='request')return;
@@ -24,9 +26,21 @@ $('reload-page').onclick=()=>location.reload();
 async function withRequestFeedback(task){
  if(requestInFlight||reloadDialog.open)throw Error('请等待当前操作完成');
  requestInFlight=true;
- loadingDialog.showModal();
- try{return await task();}
- finally{loadingDialog.close();requestInFlight=false;}
+ const showQuip=()=>{
+  $('request-quip').textContent=requestQuips[nextRequestQuip];
+  nextRequestQuip=(nextRequestQuip+1)%requestQuips.length;
+ };
+ let quipTimer;
+ try{
+  showQuip();
+  loadingDialog.showModal();
+  if(!matchMedia('(prefers-reduced-motion: reduce)').matches)quipTimer=setInterval(showQuip,1300);
+  return await task();
+ }finally{
+  clearInterval(quipTimer);
+  loadingDialog.close();
+  requestInFlight=false;
+ }
 }
 
 const versionedActions=new Set(['bots','start','cast','roll','end','take','next','reset']);

@@ -176,9 +176,16 @@ body,button,input,a{font-variant-emoji:text}a,button,.arrow,.asterisk{font-famil
 .spark-burst::before{background:radial-gradient(ellipse,#ff8e6760,transparent 60%);animation:damage-halo .32s ease-out}
 @keyframes damage-halo{0%{opacity:0;transform:scale(.6)}22%{opacity:1}100%{opacity:0;transform:scale(1.12)}}
 
-.request-loading{width:max-content;margin:auto auto max(20px,env(safe-area-inset-bottom));padding:10px 16px}
+.request-loading{width:min(300px,calc(100% - 32px));margin:auto auto max(20px,env(safe-area-inset-bottom));padding:10px 16px}
 .request-loading::backdrop{background:#0002;backdrop-filter:none}
-.request-loading>div{display:flex;align-items:center;gap:10px;font-size:14px}
-.request-spinner{width:18px;height:18px;border:2px solid var(--line);border-top-color:var(--gold);border-radius:50%;animation:request-spin .7s linear infinite}
-@keyframes request-spin{to{transform:rotate(360deg)}}
+.request-content{display:flex;align-items:center;gap:12px;min-height:42px;font-size:14px;color:var(--gold)}
+.request-sigil{position:relative;display:grid;place-items:center;flex:0 0 48px;height:44px}
+.request-sigil img{width:39px;height:39px;animation:request-orbit 5s linear infinite}
+.request-spark{position:absolute;line-height:1;color:#fff0ba;text-shadow:0 0 8px var(--gold);animation:request-twinkle 1.3s ease-in-out infinite}
+.request-spark:nth-of-type(1){top:1px;right:1px}
+.request-spark:nth-of-type(2){bottom:4px;left:0;animation-delay:-.45s}
+.request-spark:nth-of-type(3){bottom:0;right:5px;font-size:9px;animation-delay:-.9s}
+.request-status{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+@keyframes request-orbit{to{transform:rotate(1turn)}}
+@keyframes request-twinkle{0%,100%{opacity:.4;transform:translateY(2px) scale(.75)}50%{opacity:1;transform:translateY(-3px) scale(1.15)}}
 #reload-detail{line-height:1.65;color:var(--muted)}
