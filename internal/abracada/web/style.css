@@ -241,10 +241,14 @@ body,button,input,a{font-variant-emoji:text}a,button,.arrow,.asterisk{font-famil
 }
 .emoji-wheel .emoji-choice[aria-pressed="true"] {background:#444a36;border-color:var(--gold);outline:2px solid var(--gold)}
 
-@media (any-pointer:coarse) {
-  .seat[data-player]:not(.self) .seat-content > :is(h3,.life) {
-    touch-action:none;
-    -webkit-touch-callout:none;
-    user-select:none;
-  }
+.seat-title {display:flex;align-items:center;justify-content:center;gap:6px}
+.seat-title h3 {min-width:0}
+.opponent-emoji {
+  flex:none;width:34px;height:34px;min-height:34px;padding:0;margin-block:-6px -1px;
+  color:var(--gold);border-color:transparent;font:24px/1 Arial,sans-serif;
+  touch-action:none;user-select:none;-webkit-touch-callout:none;
+}
+@media (max-width:1099px) {
+  .seat[data-side="left"] .seat-title {justify-content:flex-end}
+  .seat[data-side="right"] .seat-title {flex-direction:row-reverse;justify-content:flex-end}
 }

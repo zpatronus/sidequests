@@ -248,7 +248,7 @@ function dismissSpellPreviewSoon(){
 
 function castPreviewedSpell(){
  const button=spellAnchor;
- if(!button?.isConnected||button.disabled)return;
+ if(spellPreview.hidden||!button?.isConnected||button.disabled)return;
  const spell=Number(button.dataset.spell);
  closeSpellPreview();
  void act('cast',{spell});
@@ -279,11 +279,8 @@ function spellButton(g,name,index){
  b.onpointerenter=event=>{if(event.pointerType==='mouse')openSpellPreview(b,g,index)};
  b.onpointerleave=event=>{if(event.pointerType==='mouse'&&spellAnchor===b&&!spellPreview.contains(event.relatedTarget))dismissSpellPreviewSoon()};
  b.onclick=event=>{
-  const mouse=event.pointerType==='mouse'||(!event.pointerType&&event.detail>0&&matchMedia('(hover: hover) and (pointer: fine)').matches);
   openSpellPreview(b,g,index);
-  if(spellAnchor!==b)return;
-  if(mouse)castPreviewedSpell();
-  else if(event.detail===0)$('spell-preview-cast').focus();
+  if(spellAnchor===b&&event.detail===0)$('spell-preview-cast').focus();
  };
  return b;
 }
@@ -825,7 +822,7 @@ function bindEmojiToggle(button){
 }
 const emojiWheel=$('emoji-wheel');
 const emojiWheelChoices=$('emoji-wheel-choices');
-let mousePoint=null,emojiDrag=null,wheel=null,highlightedSeat=null,emojiTouch=null;
+let mousePoint=null,emojiDrag=null,wheel=null,highlightedSeat=null,emojiAim=null;
 const gameKey=()=>room?.game?room.code+':'+room.game.id:'';
 
 function markEmojiTarget(seat){
@@ -837,7 +834,8 @@ function markEmojiTarget(seat){
 
 function cancelEmojiGesture(){
  emojiDrag=null;
- emojiTouch=null;
+ clearTimeout(emojiAim?.holdTimer);
+ emojiAim=null;
  wheel=null;
  emojiWheel.hidden=true;
  markEmojiTarget(null);
@@ -936,47 +934,52 @@ document.addEventListener('keyup',event=>{if(event.code==='KeyV'&&wheel?.keyboar
 window.addEventListener('blur',()=>{mousePoint=null;cancelEmojiGesture()});
 window.addEventListener('resize',()=>{if(wheel)cancelEmojiGesture()});
 
-// The card accepts taps. A swipe starts only on its name or life display.
+function opponentEmojiButton(seat){
+ const button=el('button','☺︎','opponent-emoji');
+ button.type='button';
+ button.setAttribute('aria-label','向该玩家投掷表情');
+ button.setAttribute('aria-controls','emoji-wheel');
+ button.onclick=event=>{
+  if(event.detail!==0||!gameKey())return;
+  const r=button.getBoundingClientRect();
+  openEmojiWheel(seat,{x:r.left+r.width/2,y:r.top+r.height/2});
+  emojiWheelChoices.firstElementChild?.focus();
+ };
+ return button;
+}
+
 document.addEventListener('pointerdown',event=>{
  if(wheel&&!emojiWheel.contains(event.target))cancelEmojiGesture();
- if(event.pointerType!=='touch'||!event.isPrimary||!gameKey()||
+ const button=event.target.closest?.('.opponent-emoji');
+ if(!button||!event.isPrimary||event.button!==0||!gameKey()||
   document.querySelector('dialog[open]'))return;
- const seat=event.target.closest?.('.seat[data-player]:not(.self)');
- if(!seat||event.target.closest('button,a,input,select,textarea,canvas,[contenteditable]'))return;
- emojiTouch={
-  id:event.pointerId,seat,x:event.clientX,y:event.clientY,
-  canSwipe:Boolean(event.target.closest('.seat-content > :is(h3,.life)')),
-  moved:false,dragging:false,
- };
+ const aim={id:event.pointerId,seat:button.closest('.seat'),x:event.clientX,y:event.clientY,dragging:false};
+ emojiAim=aim;
+ if(event.isTrusted)button.setPointerCapture(event.pointerId);
+ aim.holdTimer=setTimeout(()=>{
+  if(emojiAim===aim&&!wheel)openEmojiWheel(aim.seat,aim);
+ },220);
 });
 document.addEventListener('pointermove',event=>{
- if(emojiTouch?.id!==event.pointerId)return;
- const dx=event.clientX-emojiTouch.x,dy=event.clientY-emojiTouch.y;
- if(Math.hypot(dx,dy)>12)emojiTouch.moved=true;
- if(!emojiTouch.canSwipe)return;
- const index=wheelChoice(dx,dy,quickEmojiSlots.length);
- if(!emojiTouch.dragging){
-  if(index<0)return;
-  emojiTouch.dragging=true;
-  openEmojiWheel(emojiTouch.seat,emojiTouch);
- }
+ const aim=emojiAim;
+ if(aim?.id!==event.pointerId)return;
+ const index=wheelChoice(event.clientX-aim.x,event.clientY-aim.y,quickEmojiSlots.length);
+ if(index<0&&!aim.dragging)return;
+ aim.dragging=true;
+ if(!wheel)openEmojiWheel(aim.seat,aim);
  selectWheelEmoji(index);
 });
 document.addEventListener('pointerup',event=>{
- if(emojiTouch?.id!==event.pointerId)return;
- const touch=emojiTouch;
- emojiTouch=null;
- const dx=event.clientX-touch.x,dy=event.clientY-touch.y;
- const index=touch.canSwipe?wheelChoice(dx,dy,quickEmojiSlots.length):-1;
- if(touch.dragging||index>=0){
-  if(!wheel)openEmojiWheel(touch.seat,touch);
-  finishEmojiWheel(index);
- }else if(!touch.moved&&Math.hypot(dx,dy)<=12){
-  openEmojiWheel(touch.seat,touch);
- }
+ const aim=emojiAim;
+ if(aim?.id!==event.pointerId)return;
+ clearTimeout(aim.holdTimer);
+ emojiAim=null;
+ const index=wheelChoice(event.clientX-aim.x,event.clientY-aim.y,quickEmojiSlots.length);
+ if(!wheel)openEmojiWheel(aim.seat,aim);
+ if(aim.dragging||index>=0)finishEmojiWheel(index);
 });
 document.addEventListener('pointercancel',event=>{
- if(emojiTouch?.id===event.pointerId)cancelEmojiGesture();
+ if(emojiAim?.id===event.pointerId)cancelEmojiGesture();
 });
 
 function showReaction(value){
@@ -1066,11 +1069,15 @@ function renderSeats(g,by){
   const p=s.player;let card=existing.get(p.id);
   if(!card){
    card=el('article');card.dataset.player=p.id;
-   const content=el('div',undefined,'seat-content');content.append(el('h3'),el('div',undefined,'life'),el('div',undefined,'hand'));card.append(content);
+   const content=el('div',undefined,'seat-content'),title=el('div',undefined,'seat-title');
+   title.append(el('h3'));
+   if(p.id!==room.you)title.append(opponentEmojiButton(card));
+   content.append(title,el('div',undefined,'life'),el('div',undefined,'hand'));card.append(content);
    if(p.id===room.you){const controls=el('div',undefined,'emoji-controls'),quick=el('div',undefined,'emoji-quick');quick.setAttribute('aria-label','快捷表情');const button=el('button','☺︎','emoji-toggle');button.type='button';button.setAttribute('aria-label','发送表情');bindEmojiToggle(button);controls.append(quick,button);card.append(controls);quick.append(...quickEmojis().map(emoji=>emojiButton(emoji,true)))}
   }
   existing.delete(p.id);
   card.className='seat '+(s.offset===0?'self ':s.side==='opposite'?'opposite ':'')+(p.id===g.turn&&!['round-end','finished'].includes(g.phase)?'active':'');
+  card.dataset.side=s.side;
   card.style.gridColumn=s.column;card.style.gridRow=s.row;card.style.setProperty('--x',s.x+'%');card.style.setProperty('--y',s.y+'%');
   const heading=card.querySelector('h3'),name=p.name+(p.id===room.you?' · 你':'');const headingKey=name+':'+p.tablets;if(heading.dataset.key!==headingKey){heading.replaceChildren(document.createTextNode(name));if(p.tablets>=1){const count=el('span','秘法石板 '+p.tablets,'player-tablets');count.setAttribute('aria-label',p.tablets+' 个秘法石板');heading.append(count)}heading.dataset.key=headingKey;}
   const health=card.querySelector('.life');
