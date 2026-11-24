@@ -107,6 +107,21 @@ func TestRoomPrivacyLifecycleAndExpiry(t *testing.T) {
 	default:
 		t.Fatal("reaction was not broadcast")
 	}
+	target := decode(call("GET", "room?code="+code, nil, cookies[1], 200)).You
+	call("POST", "react", map[string]any{"code": code, "game": g.ID, "emoji": "🍅", "target": target}, host, 200)
+	select {
+	case value := <-reactions:
+		if value.Player != hostID || value.Target != target || value.Emoji != "🍅" {
+			t.Fatalf("unexpected targeted reaction: %+v", value)
+		}
+	default:
+		t.Fatal("targeted reaction was not broadcast")
+	}
+	call("POST", "react", map[string]any{"code": code, "game": "old-game", "emoji": "🍅", "target": target}, host, 400)
+	call("POST", "react", map[string]any{"code": code, "game": g.ID, "emoji": "🥚", "target": hostID}, host, 400)
+	if len(reactions) != 0 {
+		t.Fatal("gesture generated extra reactions")
+	}
 	if g.Step != step || len(g.Events) != eventCount {
 		t.Fatal("reaction changed game state or history")
 	}

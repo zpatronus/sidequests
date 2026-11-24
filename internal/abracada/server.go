@@ -139,6 +139,7 @@ type request struct {
 	Slot         int    `json:"slot"`
 	Count        int    `json:"count"`
 	Emoji        string `json:"emoji"`
+	Target       string `json:"target"`
 	Roll         int    `json:"roll"`
 }
 
@@ -383,7 +384,20 @@ func (s *server) api(w http.ResponseWriter, q *http.Request) {
 			fail(w, 400, "请选择一个表情")
 			return
 		}
-		r.sendReaction(reaction{Player: id, Emoji: in.Emoji})
+		if in.Target != "" {
+			valid := false
+			for _, player := range r.Game.Players {
+				if player.Member.ID == in.Target && in.Target != id {
+					valid = true
+					break
+				}
+			}
+			if !valid || in.Game != r.Game.ID {
+				fail(w, 400, "请选择当前桌上的其他玩家")
+				return
+			}
+		}
+		r.sendReaction(reaction{Player: id, Emoji: in.Emoji, Target: in.Target})
 		respond(w, 200, map[string]bool{"sent": true})
 		return
 	case "bots":

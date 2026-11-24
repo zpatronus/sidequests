@@ -29,3 +29,10 @@ export function anchoredPanel(anchor,width,height,viewportWidth,viewportHeight,{
   maxHeight,
  };
 }
+
+// The first wheel choice is at twelve o'clock, then choices run clockwise.
+export function wheelChoice(x,y,count){
+ if(count<1||Math.hypot(x,y)<23)return -1;
+ const angle=Math.atan2(y,x)+Math.PI/2;
+ return (Math.round(angle*count/(2*Math.PI))+count)%count;
+}

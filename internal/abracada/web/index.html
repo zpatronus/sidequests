@@ -86,6 +86,10 @@
 <dialog id="owl-dialog" class="app-dialog"><div class="dialog-heading"><h2>秘法石板</h2><button id="owl-close" class="quiet" aria-label="关闭">×</button></div><div class="owl-heading"><img src="/abracada/art/owl.svg" alt="猫头鹰"></div><div id="owl-picks" class="owl-picks"></div><div id="owl-result" class="owl-result" hidden></div><button id="owl-done" class="owl-done primary" hidden>收下</button></dialog>
 <section id="cast-stage" class="cast-stage" aria-live="polite" aria-atomic="true" hidden><div class="cast-stage-panel"><p id="cast-stage-name"></p><h2 id="cast-stage-spell"></h2><div class="cast-stage-face"><div id="cast-stage-art"></div><strong id="cast-stage-number" class="spell-number"></strong></div><div id="cast-stage-result">?</div><div id="cast-draw" hidden><canvas id="cast-draw-pad" width="640" height="380" aria-label="在这里画符掷骰"></canvas><button id="cast-draw-button" type="button">画符掷骰</button></div></div></section>
 <section id="emoji-menu" class="emoji-menu" aria-label="发送表情" hidden><div class="emoji-menu-heading"><h2>表情</h2><button id="emoji-close" class="quiet" aria-label="关闭表情菜单">×</button></div><div id="emoji-recent"></div><div id="emoji-groups"></div></section><div id="reactions" class="reactions" aria-hidden="true"></div>
+<section id="emoji-wheel" class="emoji-wheel" aria-label="投掷表情" hidden>
+ <div id="emoji-wheel-target" class="emoji-wheel-target"></div>
+ <div id="emoji-wheel-choices"></div>
+</section>
 <dialog id="request-loading" class="app-dialog request-loading" aria-label="正在处理请求">
  <div class="request-content">
   <span class="request-sigil" aria-hidden="true">

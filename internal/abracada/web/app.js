@@ -1,4 +1,4 @@
-import {anchoredPanel,seats,sortedHand} from './layout.mjs';
+import {anchoredPanel,seats,sortedHand,wheelChoice} from './layout.mjs';
 const $=id=>document.getElementById(id),names=['远古巨龙','黑暗幽灵','甜蜜的梦','猫头鹰','闪电风暴','冰晶术','火球术','治疗药水'],arts=['dragon','ghost','dream','owl','storm','ice','fire','potion'],effects=['其他所有人失去骰子点数生命','其他人失去1生命，自己恢复1','恢复骰子点数生命','拿取一个秘法石板','左右邻各失去1生命','左邻失去1生命','右邻失去1生命','恢复1生命'];let room,stream,busy=false,last=0,gameID='',pending,snapshot='',owlKey='',knownTablets=[],knownTabletKey='',tabletRequest=null;
 const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e},img=a=>{const e=el('img');e.src='/abracada/art/'+a+'.svg';e.alt='';return e},code=()=>location.hash.slice(1).toUpperCase();
 function message(s=''){$('message').textContent=s;$('message').hidden=!s}
@@ -26,7 +26,7 @@ $('reload-page').onclick=()=>location.reload();
 async function withRequestFeedback(task){
  if(requestInFlight||reloadDialog.open)throw Error('请等待当前操作完成');
  requestInFlight=true;
- closeSpellPreview();closeEmojiMenu();
+ closeSpellPreview();closeEmojiMenu();cancelEmojiGesture();
  const showQuip=()=>{
   $('request-quip').textContent=requestQuips[nextRequestQuip];
   nextRequestQuip=(nextRequestQuip+1)%requestQuips.length;
@@ -166,7 +166,7 @@ function connect(){
   if(!current())return;
   stopConnection();
   if(reloadDialog.open&&reloadDialog.dataset.reason==='connection')reloadDialog.close();
-  closeSpellPreview();closeEmojiMenu();
+  closeSpellPreview();closeEmojiMenu();cancelEmojiGesture();
   room=null;snapshot='';latestRoomSnapshot=null;cancelPresentation();
   $('entry').hidden=false;$('room').hidden=true;
   message('房间已过期或已关闭');
@@ -222,7 +222,7 @@ function placePanel(panel,anchor,{width,maxHeight,align}){
 }
 
 function positionSpellPreview(){
- if(spellAnchor&&(!spellAnchor.isConnected||!placePanel(spellPreview,spellAnchor,{width:272,maxHeight:220}))){
+ if(spellAnchor&&(!spellAnchor.isConnected||!placePanel(spellPreview,spellAnchor,{width:360,maxHeight:280}))){
   closeSpellPreview();
  }
 }
@@ -419,7 +419,7 @@ function waitForRoll(event,gameID){
  if(latest?.game?.id===gameID&&latest.game.events.some(e=>e.id===event.id&&e.roll>0))return Promise.resolve(latest);
  return new Promise(resolve=>{rollWaiter={gameID,eventID:event.id,resolve};});
 }
-function renderNow(next){const callout=$('cast-stage');if(callout?.hidden&&callout.parentElement!==document.body)document.body.append(callout);const encoded=JSON.stringify(next);if(encoded===snapshot)return;if(room?.code!==next.code||room?.game?.id!==next.game?.id||room?.game?.step!==next.game?.step){$('confirm-dialog').close();pending=null;}if(room?.code!==next.code||room?.game?.id!==next.game?.id||room?.game?.round!==next.game?.round){$('tablets-dialog').close();$('owl-dialog').close();}snapshot=encoded;room=next;$('entry').hidden=true;$('room').hidden=false;$('room-code').textContent='魔法桌 '+room.code;$('lobby').hidden=!!room.game;$('game').hidden=!room.game;$('phase-title').textContent=room.game?'出包魔法师':'等待魔法师';if(!room.game){$('lobby-count').textContent=(room.members.length+room.bots)+' / 6';const lobbyPeople=room.members.concat(Array.from({length:room.bots},(_,i)=>({id:'preview-'+i,name:['星尘学徒','苔藓术士','月光使者','迷雾巫师','琥珀法师'][i],bot:true})));$('lobby-seats').replaceChildren(...lobbyPeople.map((p,i)=>{const c=el('article',undefined,'lobby-seat');c.append(el('span',String(i+1).padStart(2,'0'),'lobby-index'),el('h3',p.name),el('span',p.bot?'机器人':p.id===room.host?'房主':'','lobby-role'));return c}));$('bots').replaceChildren(...Array.from({length:6},(_,count)=>{const button=el('button',String(count));button.type='button';button.disabled=room.you!==room.host||count>6-room.members.length;button.setAttribute('aria-pressed',String(count===room.bots));button.onclick=()=>act('bots',{count});return button}));$('start').hidden=room.you!==room.host;$('mode-note').textContent=room.members.length+room.bots===6?'六人扩展 · 43 个魔法石 · 5 个秘法石板':'标准玩法 · 36 个魔法石';return}
+function renderNow(next){const callout=$('cast-stage');if(callout?.hidden&&callout.parentElement!==document.body)document.body.append(callout);const encoded=JSON.stringify(next);if(encoded===snapshot)return;if(room?.code!==next.code||room?.game?.id!==next.game?.id)cancelEmojiGesture();if(room?.code!==next.code||room?.game?.id!==next.game?.id||room?.game?.step!==next.game?.step){$('confirm-dialog').close();pending=null;}if(room?.code!==next.code||room?.game?.id!==next.game?.id||room?.game?.round!==next.game?.round){$('tablets-dialog').close();$('owl-dialog').close();}snapshot=encoded;room=next;$('entry').hidden=true;$('room').hidden=false;$('room-code').textContent='魔法桌 '+room.code;$('lobby').hidden=!!room.game;$('game').hidden=!room.game;$('phase-title').textContent=room.game?'出包魔法师':'等待魔法师';if(!room.game){$('lobby-count').textContent=(room.members.length+room.bots)+' / 6';const lobbyPeople=room.members.concat(Array.from({length:room.bots},(_,i)=>({id:'preview-'+i,name:['星尘学徒','苔藓术士','月光使者','迷雾巫师','琥珀法师'][i],bot:true})));$('lobby-seats').replaceChildren(...lobbyPeople.map((p,i)=>{const c=el('article',undefined,'lobby-seat');c.append(el('span',String(i+1).padStart(2,'0'),'lobby-index'),el('h3',p.name),el('span',p.bot?'机器人':p.id===room.host?'房主':'','lobby-role'));return c}));$('bots').replaceChildren(...Array.from({length:6},(_,count)=>{const button=el('button',String(count));button.type='button';button.disabled=room.you!==room.host||count>6-room.members.length;button.setAttribute('aria-pressed',String(count===room.bots));button.onclick=()=>act('bots',{count});return button}));$('start').hidden=room.you!==room.host;$('mode-note').textContent=room.members.length+room.bots===6?'六人扩展 · 43 个魔法石 · 5 个秘法石板':'标准玩法 · 36 个魔法石';return}
 const g=room.game,own=g.players.find(p=>p.id===room.you);const tabletKey=currentTabletKey();if(knownTabletKey!==tabletKey){knownTabletKey=tabletKey;knownTablets=[];tabletRequest=null;}if(own.tablets>knownTablets.length)loadKnownTablets({background:true}).catch(()=>{});const by=id=>g.players.find(p=>p.id===id)?.name||'';if(gameID!==g.id){gameID=g.id;last=Math.max(0,...g.events.map(e=>e.id))}const ended=['round-end','finished'].includes(g.phase);$('round-label').textContent='第 '+g.round+' 轮';$('mode-label').textContent=g.players.length===6?'六人扩展':'标准玩法';$('turn-label').textContent=ended?'本轮结束':by(g.turn)+(g.turn===room.you?' · 轮到你':'');$('neighbors').textContent='你的左邻：'+by(own.left)+' · 右邻／下家：'+by(own.right);
 $('score-strip').replaceChildren(...g.players.map(p=>{const score=el('div',undefined,'score-entry'+(p.id===room.you?' is-you':''));score.append(el('span',p.name),el('strong',p.score),el('span','/ 8','score-goal'));return score}));
 renderSeats(g,by);if(!$('emoji-menu').hidden)positionEmojiMenu();
@@ -482,7 +482,6 @@ document.addEventListener('visibilitychange',()=>{
 window.addEventListener('pagehide',stopConnection);
 window.addEventListener('pageshow',resume);
 $('code').value=code();
-resume();
 
 async function resumePendingRoll(state){
  if(presentationActive||olderRoomSnapshot(state))return;
@@ -518,14 +517,40 @@ async function resumePendingRoll(state){
 function animateCast(e){
  if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
  const source=document.querySelector('[data-player="'+e.actor+'"]');if(!source)return;
- const a=source.getBoundingClientRect();
  if(!e.success){damageHit(source,'backfire',e.roll||1);return}
  const hits=new Map(),damage='#f68060',heal='#8fc58b',owl='#e7d59e';
  if(e.spell===2){for(const id of e.targets||[])hits.set(id,damage);hits.set(e.actor,heal)}
  else if(e.spell===3||e.spell===8)hits.set(e.actor,heal);
  else if(e.spell===4)hits.set(e.actor,owl);
  else for(const id of e.targets||[])hits.set(id,damage);
- for(const [id,color] of hits){const target=document.querySelector('[data-player="'+id+'"]');if(!target)continue;const b=target.getBoundingClientRect();const effect=img(arts[e.spell-1]);Object.assign(effect.style,{position:'fixed',width:'72px',height:'74px',left:(a.x+a.width/2-36)+'px',top:(a.y+a.height/2-37)+'px',filter:'drop-shadow(0 0 18px '+color+')'});$('effects').append(effect);const motion=effect.animate([{opacity:0,transform:'scale(.3) rotate(-25deg)'},{opacity:1,offset:.2,transform:'scale(1.2)'},{opacity:0,transform:'translate('+(b.x+b.width/2-a.x-a.width/2)+'px,'+(b.y+b.height/2-a.y-a.height/2)+'px) scale(.7) rotate(20deg)'}],{duration:900,easing:'ease-in-out'});motion.onfinish=()=>{effect.remove();const recipient=document.querySelector('[data-player="'+id+'"]');if(color===heal)healHit(recipient,e.spell===3?e.roll:1);else if(color===owl)flashHit(recipient,color);else damageHit(recipient,e.spell,e.roll||1)}}
+ const layer=$('effects'),origin=layer.getBoundingClientRect();
+ const a=source.getBoundingClientRect();
+ const x=a.left+a.width/2,y=a.top+a.height/2;
+ for(const [id,color] of hits){
+  const target=document.querySelector('[data-player="'+id+'"]');
+  if(!target)continue;
+  const b=target.getBoundingClientRect();
+  const dx=b.left+b.width/2-x,dy=b.top+b.height/2-y;
+  const effect=img(arts[e.spell-1]);
+  Object.assign(effect.style,{
+   position:'absolute',width:'72px',height:'74px',
+   left:(x-origin.left-36)+'px',top:(y-origin.top-37)+'px',
+   filter:'drop-shadow(0 0 18px '+color+')',
+  });
+  layer.append(effect);
+  const motion=effect.animate([
+   {opacity:0,transform:'scale(.3) rotate(-25deg)'},
+   {opacity:1,offset:.2,transform:'scale(1.2)'},
+   {opacity:0,transform:`translate(${dx}px,${dy}px) scale(.7) rotate(20deg)`},
+  ],{duration:900,easing:'ease-in-out'});
+  motion.onfinish=()=>{
+   effect.remove();
+   const recipient=document.querySelector('[data-player="'+id+'"]');
+   if(color===heal)healHit(recipient,e.spell===3?e.roll:1);
+   else if(color===owl)flashHit(recipient,color);
+   else damageHit(recipient,e.spell,e.roll||1);
+  };
+ }
 }
 
 function openOwl(){
@@ -713,8 +738,18 @@ function healHit(target,amount){
 }
 
 const emojiSendInterval=500;
-let emojiCatalog=null,emojiLoading=null,recentEmoji=[],lastEmojiSend=-Infinity,emojiCloseTimer;
-try{const saved=JSON.parse(localStorage.getItem('abr-emoji-recent')||'[]');if(Array.isArray(saved))recentEmoji=[...new Set(saved.filter(x=>typeof x==='string'))].slice(0,10)}catch{}
+const defaultQuickEmoji=['😂','🤣','😭','🤡','👍'];
+function readEmojiList(key,limit){
+ try{
+  const saved=JSON.parse(localStorage.getItem(key)||'[]');
+  if(Array.isArray(saved))return [...new Set(saved.filter(x=>typeof x==='string'))].slice(0,limit);
+ }catch{}
+ return [];
+}
+let emojiCatalog=null,emojiLoading=null,lastEmojiSend=-Infinity,emojiCloseTimer;
+let recentEmoji=readEmojiList('abr-emoji-recent',10);
+const savedQuickEmoji=readEmojiList('abr-emoji-quick',5);
+const quickEmojiSlots=[...new Set([...(savedQuickEmoji.length?savedQuickEmoji:recentEmoji),...defaultQuickEmoji])].slice(0,5);
 async function openEmojiMenu(){
  clearTimeout(emojiCloseTimer);
  if(!$('emoji-menu').hidden)return;
@@ -726,24 +761,46 @@ async function openEmojiMenu(){
  }catch(error){emojiLoading=null;message(error.message);closeEmojiMenu()}
 }
 function closeEmojiMenu(){clearTimeout(emojiCloseTimer);$('emoji-menu').hidden=true;document.querySelector('.emoji-toggle')?.setAttribute('aria-expanded','false')}
-function emojiButton(emoji,quick=false){const b=el('button',emoji,'emoji-choice');b.type='button';b.setAttribute('aria-label','发送 '+emoji);b.onclick=()=>sendEmoji(emoji,quick);return b}
-function drawQuickEmoji(){
- const row=document.querySelector('.emoji-quick');if(!row)return;
- const options=[...new Set([...recentEmoji,'😂','🤣','😭','🤡','👍'])].slice(0,5);
- row.replaceChildren(...options.map(emoji=>emojiButton(emoji,true)));
+const quickEmojis=()=>[...quickEmojiSlots];
+function emojiButton(emoji,quick=false){
+ const b=el('button',emoji,'emoji-choice');
+ b.type='button';b.setAttribute('aria-label','发送 '+emoji);b.onclick=()=>sendEmoji(emoji);
+ if(quick&&matchMedia('(any-pointer: fine)').matches){
+  b.draggable=true;
+  b.ondragstart=event=>startEmojiDrag(event,emoji);
+  b.ondragend=cancelEmojiGesture;
+ }
+ return b;
+}
+function rememberEmoji(emoji){
+ if(!quickEmojiSlots.includes(emoji)){
+  let slot=0,oldest=-1;
+  for(const [index,value] of quickEmojiSlots.entries()){
+   const rank=recentEmoji.indexOf(value);
+   const age=rank===-1?recentEmoji.length:rank;
+   if(age>=oldest){slot=index;oldest=age}
+  }
+  quickEmojiSlots[slot]=emoji;
+  document.querySelector('.emoji-quick')?.children[slot]?.replaceWith(emojiButton(emoji,true));
+ }
+ recentEmoji=[emoji,...recentEmoji.filter(e=>e!==emoji)].slice(0,10);
+ try{
+  localStorage.setItem('abr-emoji-recent',JSON.stringify(recentEmoji));
+  localStorage.setItem('abr-emoji-quick',JSON.stringify(quickEmojiSlots));
+ }catch{}
 }
 function drawEmojiMenu(){
  const recent=$('emoji-recent');recent.replaceChildren();
  if(recentEmoji.length){recent.append(el('h3','最近'));const grid=el('div',undefined,'emoji-grid');grid.append(...recentEmoji.map(emoji=>emojiButton(emoji)));recent.append(grid)}
  $('emoji-groups').replaceChildren(...(emojiCatalog||[]).map(group=>{const section=el('section');section.append(el('h3',group.name));const grid=el('div',undefined,'emoji-grid');grid.append(...group.emojis.map(emoji=>emojiButton(emoji)));section.append(grid);return section}));
 }
-async function sendEmoji(emoji,quick=false){
+async function sendEmoji(emoji,target){
  if(!room?.game)return;
  const now=performance.now();
  if(now-lastEmojiSend<emojiSendInterval)return;
  lastEmojiSend=now;
  const activeCode=room.code;
- try{await api('react',{code:activeCode,emoji},{background:true});if(room?.code!==activeCode)return;recentEmoji=[emoji,...recentEmoji.filter(e=>e!==emoji)].slice(0,10);try{localStorage.setItem('abr-emoji-recent',JSON.stringify(recentEmoji))}catch{}if(!quick)drawQuickEmoji();}catch(error){message(error.message)}
+ try{await api('react',{code:activeCode,emoji,...(target?{target,game:room.game.id}:{})},{background:true});if(room?.code===activeCode)rememberEmoji(emoji);}catch(error){message(error.message)}
 }
 function dismissEmojiMenuSoon(){
  clearTimeout(emojiCloseTimer);
@@ -766,15 +823,207 @@ function bindEmojiToggle(button){
   if(event.detail===0&&!$('emoji-menu').hidden)$('emoji-close').focus();
  };
 }
+const emojiWheel=$('emoji-wheel');
+const emojiWheelChoices=$('emoji-wheel-choices');
+let mousePoint=null,emojiDrag=null,wheel=null,highlightedSeat=null,emojiTouch=null;
+const gameKey=()=>room?.game?room.code+':'+room.game.id:'';
+
+function markEmojiTarget(seat){
+ if(highlightedSeat===seat)return;
+ highlightedSeat?.removeAttribute('data-emoji-target');
+ highlightedSeat=seat;
+ highlightedSeat?.setAttribute('data-emoji-target','');
+}
+
+function cancelEmojiGesture(){
+ emojiDrag=null;
+ emojiTouch=null;
+ wheel=null;
+ emojiWheel.hidden=true;
+ markEmojiTarget(null);
+}
+
+function startEmojiDrag(event,emoji){
+ if(!gameKey()||!event.dataTransfer){event.preventDefault();return}
+ cancelEmojiGesture();closeSpellPreview();closeEmojiMenu();
+ emojiDrag={emoji,game:gameKey()};
+ event.dataTransfer.setData('text/plain',emoji);
+ event.dataTransfer.effectAllowed='copy';
+}
+
+function dropTarget(event){
+ const seat=event.target.closest?.('.seat[data-player]');
+ return seat&&seat.dataset.player!==room?.you?seat:null;
+}
+$('game').addEventListener('dragover',event=>{
+ if(!emojiDrag||emojiDrag.game!==gameKey())return;
+ const seat=dropTarget(event);
+ markEmojiTarget(seat);
+ if(seat){event.preventDefault();event.dataTransfer.dropEffect='copy'}
+});
+$('game').addEventListener('dragleave',event=>{
+ if(emojiDrag&&!$('game').contains(event.relatedTarget))markEmojiTarget(null);
+});
+$('game').addEventListener('drop',event=>{
+ if(!emojiDrag||emojiDrag.game!==gameKey())return;
+ event.preventDefault();
+ const seat=dropTarget(event),emoji=emojiDrag.emoji;
+ cancelEmojiGesture();
+ if(seat)void sendEmoji(emoji,seat.dataset.player);
+});
+
+function nearestEmojiSeat(point){
+ let best=null,distance=64;
+ for(const seat of document.querySelectorAll('.seat[data-player]')){
+  if(seat.dataset.player===room?.you)continue;
+  const r=seat.getBoundingClientRect();
+  if(!r.width||!r.height||r.bottom<=0||r.top>=innerHeight)continue;
+  const dx=Math.max(r.left-point.x,0,point.x-r.right);
+  const dy=Math.max(r.top-point.y,0,point.y-r.bottom);
+  const gap=Math.hypot(dx,dy);
+  if(gap<distance){distance=gap;best=seat}
+ }
+ return best;
+}
+
+function selectWheelEmoji(index){
+ if(!wheel||wheel.index===index)return;
+ wheel.index=index;
+ [...emojiWheelChoices.children].forEach((button,i)=>button.setAttribute('aria-pressed',String(i===index)));
+}
+
+function finishEmojiWheel(index){
+ const selection=wheel;
+ cancelEmojiGesture();
+ if(selection?.game===gameKey()&&index>=0)void sendEmoji(selection.emojis[index],selection.target);
+}
+
+function openEmojiWheel(seat,point,keyboard=false){
+ closeSpellPreview();closeEmojiMenu();
+ const radius=86;
+ const x=Math.min(innerWidth-radius,Math.max(radius,point.x));
+ const y=Math.min(innerHeight-radius,Math.max(radius,point.y));
+ const emojis=quickEmojis();
+ wheel={x,y,keyboard,index:-1,emojis,game:gameKey(),target:seat.dataset.player};
+ $('emoji-wheel-target').textContent=room.game.players.find(p=>p.id===wheel.target)?.name??'';
+ emojiWheelChoices.replaceChildren(...emojis.map((emoji,index)=>{
+  const b=el('button',emoji,'emoji-choice');
+  const angle=index*2*Math.PI/emojis.length-Math.PI/2;
+  b.type='button';b.setAttribute('aria-label','投掷 '+emoji);b.setAttribute('aria-pressed','false');
+  b.style.left=86+Math.cos(angle)*60+'px';
+  b.style.top=86+Math.sin(angle)*60+'px';
+  b.onclick=()=>finishEmojiWheel(index);
+  return b;
+ }));
+ emojiWheel.style.left=x+'px';emojiWheel.style.top=y+'px';emojiWheel.hidden=false;
+ markEmojiTarget(seat);
+}
+
+document.addEventListener('pointermove',event=>{
+ if(event.pointerType!=='mouse')return;
+ mousePoint={x:event.clientX,y:event.clientY};
+ if(wheel?.keyboard)selectWheelEmoji(wheelChoice(mousePoint.x-wheel.x,mousePoint.y-wheel.y,wheel.emojis.length));
+});
+document.addEventListener('keydown',event=>{
+ if(event.key==='Escape'&&wheel){cancelEmojiGesture();return}
+ if(event.code!=='KeyV'||event.repeat||event.isComposing||event.ctrlKey||event.metaKey||event.altKey||
+  event.target.closest?.('input,textarea,select,[contenteditable]')||!mousePoint||!gameKey()||
+  emojiDrag||document.querySelector('dialog[open]'))return;
+ const seat=nearestEmojiSeat(mousePoint);
+ if(seat){event.preventDefault();openEmojiWheel(seat,mousePoint,true)}
+});
+document.addEventListener('keyup',event=>{if(event.code==='KeyV'&&wheel?.keyboard)finishEmojiWheel(wheel.index)});
+window.addEventListener('blur',()=>{mousePoint=null;cancelEmojiGesture()});
+window.addEventListener('resize',()=>{if(wheel)cancelEmojiGesture()});
+
+// The card accepts taps. A swipe starts only on its name or life display.
+document.addEventListener('pointerdown',event=>{
+ if(wheel&&!emojiWheel.contains(event.target))cancelEmojiGesture();
+ if(event.pointerType!=='touch'||!event.isPrimary||!gameKey()||
+  document.querySelector('dialog[open]'))return;
+ const seat=event.target.closest?.('.seat[data-player]:not(.self)');
+ if(!seat||event.target.closest('button,a,input,select,textarea,canvas,[contenteditable]'))return;
+ emojiTouch={
+  id:event.pointerId,seat,x:event.clientX,y:event.clientY,
+  canSwipe:Boolean(event.target.closest('.seat-content > :is(h3,.life)')),
+  moved:false,dragging:false,
+ };
+});
+document.addEventListener('pointermove',event=>{
+ if(emojiTouch?.id!==event.pointerId)return;
+ const dx=event.clientX-emojiTouch.x,dy=event.clientY-emojiTouch.y;
+ if(Math.hypot(dx,dy)>12)emojiTouch.moved=true;
+ if(!emojiTouch.canSwipe)return;
+ const index=wheelChoice(dx,dy,quickEmojiSlots.length);
+ if(!emojiTouch.dragging){
+  if(index<0)return;
+  emojiTouch.dragging=true;
+  openEmojiWheel(emojiTouch.seat,emojiTouch);
+ }
+ selectWheelEmoji(index);
+});
+document.addEventListener('pointerup',event=>{
+ if(emojiTouch?.id!==event.pointerId)return;
+ const touch=emojiTouch;
+ emojiTouch=null;
+ const dx=event.clientX-touch.x,dy=event.clientY-touch.y;
+ const index=touch.canSwipe?wheelChoice(dx,dy,quickEmojiSlots.length):-1;
+ if(touch.dragging||index>=0){
+  if(!wheel)openEmojiWheel(touch.seat,touch);
+  finishEmojiWheel(index);
+ }else if(!touch.moved&&Math.hypot(dx,dy)<=12){
+  openEmojiWheel(touch.seat,touch);
+ }
+});
+document.addEventListener('pointercancel',event=>{
+ if(emojiTouch?.id===event.pointerId)cancelEmojiGesture();
+});
+
 function showReaction(value){
- if(!room?.game||!room.game.players.some(p=>p.id===value.player))return;
- const seat=document.querySelector('[data-player="'+value.player+'"]');if(!seat)return;
- const r=seat.getBoundingClientRect(),emoji=el('span',value.emoji,'floating-emoji');
- emoji.style.left=(r.left+r.width/2+(Math.random()-.5)*24)+'px';emoji.style.top=(r.top+Math.min(44,r.height/2))+'px';
- $('reactions').append(emoji);
+ if(!room?.game)return;
+ const seatFor=id=>[...document.querySelectorAll('.seat[data-player]')].find(seat=>seat.dataset.player===id);
+ const sender=seatFor(value.player),target=value.target?seatFor(value.target):sender;
+ if(!sender||!target)return;
+ const from=sender.getBoundingClientRect(),to=target.getBoundingClientRect(),thrown=Boolean(value.target);
  const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
- const animation=emoji.animate(reduced?[{opacity:1},{opacity:1,offset:.7},{opacity:0}]:[{opacity:0,transform:'translate(-50%,0) scale(.7)'},{opacity:1,transform:'translate(-50%,-12px) scale(1)',offset:.08},{opacity:1,transform:'translate(-50%,-95px)',offset:.7},{opacity:0,transform:'translate(-50%,-160px)'}],{duration:5000,easing:'linear'});
- animation.onfinish=()=>emoji.remove();
+ const layer=$('reactions'),origin=layer.getBoundingClientRect();
+ const targetX=to.left+to.width/2,targetY=to.top+Math.min(44,to.height/2);
+ const jitter=range=>(Math.random()-.5)*range;
+ for(const direction of thrown?[-1,0,1]:[0]){
+  const emoji=el('span',value.emoji,'floating-emoji');
+  const x=targetX+(thrown?jitter(18):jitter(24)),y=targetY+(thrown?jitter(14):0);
+  emoji.style.left=x-origin.left+'px';
+  emoji.style.top=y-origin.top+'px';
+  layer.append(emoji);
+  const pose=(dx,dy,scale,angle=0)=>`translate(calc(-50% + ${dx}px),${dy}px) rotate(${angle}deg) scale(${scale})`;
+  let frames,timing;
+  if(reduced){
+   frames=[{opacity:1,transform:pose(direction*30,0,1)},{opacity:1,offset:.7},{opacity:0}];
+   timing={duration:thrown?1800:5000};
+  }else if(thrown){
+   const dx=from.left+from.width/2-x,dy=from.top+Math.min(44,from.height/2)-y;
+   const splashX=direction*(46+jitter(18))+jitter(12);
+   const splashY=(direction===0?42:13)+jitter(14);
+   const angle=direction*28+jitter(24);
+   frames=[
+    {opacity:0,transform:pose(dx,dy,.6),easing:'ease-in'},
+    {opacity:1,offset:.1,transform:pose(dx*.94,dy*.94,.8),easing:'ease-in-out'},
+    {opacity:1,offset:.59,transform:pose(0,0,1.08),easing:'ease-out'},
+    {opacity:1,offset:.83,transform:pose(splashX*.83,splashY*.75,1.08,angle*.8),easing:'ease-in'},
+    {opacity:0,transform:pose(splashX,splashY,.78,angle)},
+   ];
+   timing={duration:1650,delay:(direction+1)*75,fill:'backwards'};
+  }else{
+   frames=[
+    {opacity:0,transform:pose(0,0,.7)},
+    {opacity:1,offset:.08,transform:pose(0,-12,1)},
+    {opacity:1,offset:.7,transform:pose(0,-95,1)},
+    {opacity:0,transform:pose(0,-160,1)},
+   ];
+   timing={duration:5000};
+  }
+  emoji.animate(frames,timing).onfinish=()=>emoji.remove();
+ }
 }
 $('emoji-menu').addEventListener('pointerenter',()=>clearTimeout(emojiCloseTimer));
 $('emoji-menu').addEventListener('pointerleave',event=>{
@@ -791,7 +1040,10 @@ document.addEventListener('keydown',event=>{
 function positionActionPanels(){positionEmojiMenu();positionSpellPreview()}
 window.addEventListener('resize',positionActionPanels);
 window.addEventListener('scroll',event=>{
- if(event.target!==$('emoji-menu')&&event.target!==spellPreview)positionActionPanels();
+ if(event.target!==$('emoji-menu')&&event.target!==spellPreview){
+  if(wheel&&!wheel.keyboard)cancelEmojiGesture();
+  positionActionPanels();
+ }
 },{passive:true,capture:true});
 
 function positionCastCallout(){
@@ -815,7 +1067,7 @@ function renderSeats(g,by){
   if(!card){
    card=el('article');card.dataset.player=p.id;
    const content=el('div',undefined,'seat-content');content.append(el('h3'),el('div',undefined,'life'),el('div',undefined,'hand'));card.append(content);
-   if(p.id===room.you){const controls=el('div',undefined,'emoji-controls'),quick=el('div',undefined,'emoji-quick');quick.setAttribute('aria-label','快捷表情');const button=el('button','☺︎','emoji-toggle');button.type='button';button.setAttribute('aria-label','发送表情');bindEmojiToggle(button);controls.append(quick,button);card.append(controls);quick.append(...[...new Set([...recentEmoji,'😂','🤣','😭','🤡','👍'])].slice(0,5).map(emoji=>emojiButton(emoji,true)))}
+   if(p.id===room.you){const controls=el('div',undefined,'emoji-controls'),quick=el('div',undefined,'emoji-quick');quick.setAttribute('aria-label','快捷表情');const button=el('button','☺︎','emoji-toggle');button.type='button';button.setAttribute('aria-label','发送表情');bindEmojiToggle(button);controls.append(quick,button);card.append(controls);quick.append(...quickEmojis().map(emoji=>emojiButton(emoji,true)))}
   }
   existing.delete(p.id);
   card.className='seat '+(s.offset===0?'self ':s.side==='opposite'?'opposite ':'')+(p.id===g.turn&&!['round-end','finished'].includes(g.phase)?'active':'');
@@ -864,3 +1116,4 @@ $('result-title').onpointerdown=event=>{
 };
 window.addEventListener('resize',()=>{if(!matchMedia('(min-width:1100px)').matches)$('round-result').removeAttribute('style');else clampResultWindow()});
 new MutationObserver(()=>requestAnimationFrame(clampResultWindow)).observe($('round-result'),{attributes:true,attributeFilter:['hidden','class']});
+resume();
