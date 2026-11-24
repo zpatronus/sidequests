@@ -98,10 +98,10 @@ func TestRoomPrivacyLifecycleAndExpiry(t *testing.T) {
 	reactions := make(chan reaction, 2)
 	s.rooms[code].reactions = map[chan reaction]struct{}{reactions: {}}
 	step, eventCount := g.Step, len(g.Events)
-	call("POST", "react", map[string]any{"code": code, "emoji": "🤣", "player": "spoofed"}, host, 200)
+	call("POST", "react", map[string]any{"code": code, "emoji": "㊗️", "player": "spoofed"}, host, 200)
 	select {
 	case value := <-reactions:
-		if value.Player != hostID || value.Emoji != "🤣" {
+		if value.Player != hostID || value.Emoji != "㊗️" {
 			t.Fatal("reaction identity not authenticated")
 		}
 	default:
