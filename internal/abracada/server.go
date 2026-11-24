@@ -15,7 +15,7 @@ import (
 	"github.com/zpatronus/sidequests/internal/roomdb"
 )
 
-//go:embed web/index.html web/style.css web/app.js web/layout.mjs web/art/*
+//go:embed web/index.html web/style.css web/app.js web/layout.mjs web/art/* web/fonts/*
 var assets embed.FS
 
 const roomIdleTTL = 15 * time.Minute
@@ -82,11 +82,15 @@ func (s *server) handler() http.Handler {
 			return
 		}
 		path := q.URL.Path
-		if path != "/" && path != "/style.css" && path != "/app.js" && path != "/layout.mjs" && !strings.HasPrefix(path, "/art/") {
+		if path != "/" && path != "/style.css" && path != "/app.js" && path != "/layout.mjs" &&
+			path != "/fonts/noto-color-emoji-reactions.woff2" && path != "/fonts/OFL.txt" && !strings.HasPrefix(path, "/art/") {
 			http.NotFound(w, q)
 			return
 		}
 		w.Header().Set("Cache-Control", "no-cache")
+		if path == "/fonts/noto-color-emoji-reactions.woff2" {
+			w.Header().Set("Content-Type", "font/woff2")
+		}
 		static.ServeHTTP(w, q)
 	})
 }

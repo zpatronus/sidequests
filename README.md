@@ -73,6 +73,7 @@ The Chinese adaptation in `internal/secrethitler/` is licensed under **CC BY-NC-
 - Seat order and the first starter are randomized once. Turns proceed counterclockwise; subsequent rounds start with the player who ended the previous round.
 - Original game: **Abracada...What?**, designed by Gary Kim. [Chinese rules reference](https://gameurlife.pixnet.net/blog/posts/10335625152) · [English rules reference](https://www.rulespal.com/abracada-what/rulebook).
 - Rules, UI and SVG illustrations are independently implemented. The counterclockwise sequence, subsequent-round starter and six-player supply follow this project's selected rules.
+- Reactions use a self-hosted [Google Noto Color Emoji](https://github.com/googlefonts/noto-emoji) subset under the [SIL Open Font License](internal/abracada/web/fonts/OFL.txt). When adding reactions, regenerate the WOFF2 subset from the Google Fonts COLRv1 font using the characters in `internal/abracada/reactions.go`.
 
 ## Offer Call cloud saves and sharing
 
