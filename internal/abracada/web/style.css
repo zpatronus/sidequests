@@ -189,3 +189,36 @@ body,button,input,a{font-variant-emoji:text}a,button,.arrow,.asterisk{font-famil
 @keyframes request-orbit{to{transform:rotate(1turn)}}
 @keyframes request-twinkle{0%,100%{opacity:.4;transform:translateY(2px) scale(.75)}50%{opacity:1;transform:translateY(-3px) scale(1.15)}}
 #reload-detail{line-height:1.65;color:var(--muted)}
+
+.spell-preview {
+  position:fixed;
+  z-index:44;
+  overflow:auto;
+  overscroll-behavior:contain;
+  padding:12px 14px;
+  border:1px solid var(--edge);
+  background:#252d23;
+  color:var(--ink);
+  box-shadow:0 10px 30px #0007;
+}
+.spell-preview h2 {margin:0 0 5px;color:var(--gold);font-size:16px;letter-spacing:0}
+.spell-preview p {margin:0 0 9px;font-size:13px;line-height:1.5;color:var(--muted)}
+.spell-preview button {min-height:36px;padding:5px 10px;font-size:13px}
+
+@media (min-width:1100px) {
+  .play-layout {grid-template-columns:minmax(0,1fr) 420px}
+  .count-label {gap:5px}
+  .count-label span {font-size:13px}
+  .count-slots {gap:3px}
+  .count-slot {width:19px}
+}
+
+@media (min-width:1100px), (min-width:601px) and (hover:hover) and (pointer:fine) {
+  .count-board {grid-template-columns:repeat(2,minmax(0,1fr));column-gap:14px}
+  .count-row:nth-child(-n+4) {grid-column:1}
+  .count-row:nth-child(n+5) {grid-column:2}
+  .count-row:nth-child(1), .count-row:nth-child(8) {grid-row:1}
+  .count-row:nth-child(2), .count-row:nth-child(7) {grid-row:2}
+  .count-row:nth-child(3), .count-row:nth-child(6) {grid-row:3}
+  .count-row:nth-child(4), .count-row:nth-child(5) {grid-row:4}
+}

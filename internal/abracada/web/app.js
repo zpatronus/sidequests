@@ -1,4 +1,4 @@
-import {seats,sortedHand} from './layout.mjs';
+import {anchoredPanel,seats,sortedHand} from './layout.mjs';
 const $=id=>document.getElementById(id),names=['远古巨龙','黑暗幽灵','甜蜜的梦','猫头鹰','闪电风暴','冰晶术','火球术','治疗药水'],arts=['dragon','ghost','dream','owl','storm','ice','fire','potion'],effects=['其他所有人失去骰子点数生命','其他人失去1生命，自己恢复1','恢复骰子点数生命','拿取一个秘法石板','左右邻各失去1生命','左邻失去1生命','右邻失去1生命','恢复1生命'];let room,stream,busy=false,last=0,gameID='',pending,snapshot='',owlKey='',knownTablets=[],knownTabletKey='',tabletRequest=null;
 const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e},img=a=>{const e=el('img');e.src='/abracada/art/'+a+'.svg';e.alt='';return e},code=()=>location.hash.slice(1).toUpperCase();
 function message(s=''){$('message').textContent=s;$('message').hidden=!s}
@@ -26,6 +26,7 @@ $('reload-page').onclick=()=>location.reload();
 async function withRequestFeedback(task){
  if(requestInFlight||reloadDialog.open)throw Error('请等待当前操作完成');
  requestInFlight=true;
+ closeSpellPreview();closeEmojiMenu();
  const showQuip=()=>{
   $('request-quip').textContent=requestQuips[nextRequestQuip];
   nextRequestQuip=(nextRequestQuip+1)%requestQuips.length;
@@ -165,6 +166,7 @@ function connect(){
   if(!current())return;
   stopConnection();
   if(reloadDialog.open&&reloadDialog.dataset.reason==='connection')reloadDialog.close();
+  closeSpellPreview();closeEmojiMenu();
   room=null;snapshot='';latestRoomSnapshot=null;cancelPresentation();
   $('entry').hidden=false;$('room').hidden=true;
   message('房间已过期或已关闭');
@@ -192,6 +194,100 @@ function confirm(title,fn,label='确认施法',effect=''){if(requestInFlight||re
 $('confirm-accept').onclick=()=>{const f=pending;$('confirm-dialog').close();f?.()};for(const id of ['confirm-close','confirm-cancel'])$(id).onclick=()=>$('confirm-dialog').close();for(const kind of ['rules','tablets']){$(kind+'-close').onclick=()=>$(kind+'-dialog').close()}$('rules-open').onclick=()=>$('rules-dialog').showModal();
 try{$('name').value=localStorage.getItem('abr-name')||'';}catch{}
 $('entry-form').onsubmit=async e=>{e.preventDefault();try{const nickname=$('name').value.trim();const next=await api(e.submitter?.dataset.entry||'create',{name:nickname,code:$('code').value.trim()});try{localStorage.setItem('abr-name',nickname);}catch{}location.hash=next.code;render(next);connect()}catch(e){message(e.message)}};
+const spellPreview=$('spell-preview');
+let spellAnchor=null,spellPreviewTimer;
+
+function closeSpellPreview(restoreFocus=false){
+ clearTimeout(spellPreviewTimer);
+ spellPreview.hidden=true;
+ const anchor=spellAnchor;
+ spellAnchor=null;
+ anchor?.setAttribute('aria-expanded','false');
+ if(restoreFocus&&anchor?.isConnected)anchor.focus();
+}
+
+function placePanel(panel,anchor,{width,maxHeight,align}){
+ const rect=anchor.getBoundingClientRect();
+ if(rect.bottom<=0||rect.top>=innerHeight||rect.right<=0||rect.left>=innerWidth)return false;
+ const panelWidth=Math.min(width,innerWidth-24);
+ panel.style.width=panelWidth+'px';
+ panel.style.maxHeight='';
+ const naturalHeight=Math.min(panel.offsetHeight,maxHeight);
+ const placement=anchoredPanel(rect,panelWidth,naturalHeight,innerWidth,innerHeight,{align});
+ if(placement.maxHeight<44)return false;
+ panel.style.maxHeight=Math.min(maxHeight,placement.maxHeight)+'px';
+ panel.style.left=placement.left+'px';
+ panel.style.top=placement.top+'px';
+ return true;
+}
+
+function positionSpellPreview(){
+ if(spellAnchor&&(!spellAnchor.isConnected||!placePanel(spellPreview,spellAnchor,{width:272,maxHeight:220}))){
+  closeSpellPreview();
+ }
+}
+
+function openSpellPreview(button,g,index){
+ if(button.disabled||busy||requestInFlight||reloadDialog.open)return;
+ clearTimeout(spellPreviewTimer);
+ if(spellAnchor===button)return;
+ closeSpellPreview();
+ closeEmojiMenu();
+ spellAnchor=button;
+ button.setAttribute('aria-expanded','true');
+ $('spell-preview-title').textContent='施放 '+g.ids[index]+' 号'+names[index]+'？';
+ $('spell-preview-effect').textContent=effects[index]+(index===0?'；失败时自己失去骰子点数生命':'；失败时自己失去 1 点生命');
+ spellPreview.hidden=false;
+ positionSpellPreview();
+}
+
+function dismissSpellPreviewSoon(){
+ clearTimeout(spellPreviewTimer);
+ spellPreviewTimer=setTimeout(()=>{if(!spellPreview.contains(document.activeElement))closeSpellPreview()},240);
+}
+
+function castPreviewedSpell(){
+ const button=spellAnchor;
+ if(!button?.isConnected||button.disabled)return;
+ const spell=Number(button.dataset.spell);
+ closeSpellPreview();
+ void act('cast',{spell});
+}
+
+spellPreview.addEventListener('pointerenter',()=>clearTimeout(spellPreviewTimer));
+spellPreview.addEventListener('pointerleave',event=>{if(event.pointerType==='mouse'&&event.relatedTarget!==spellAnchor&&!spellAnchor?.contains(event.relatedTarget))dismissSpellPreviewSoon()});
+$('spell-preview-cast').onclick=castPreviewedSpell;
+document.addEventListener('pointerdown',event=>{
+ if(spellAnchor&&!spellPreview.contains(event.target)&&!spellAnchor.contains(event.target))closeSpellPreview();
+});
+document.addEventListener('focusin',event=>{
+ if(spellAnchor&&!spellPreview.contains(event.target)&&!spellAnchor.contains(event.target))closeSpellPreview();
+});
+document.addEventListener('keydown',event=>{
+ if(event.key==='Escape'&&spellAnchor)closeSpellPreview(spellPreview.contains(document.activeElement));
+});
+
+function spellButton(g,name,index){
+ const b=el('button',undefined,'spell-'+(index+1));
+ b.type='button';
+ b.dataset.spell=String(index+1);
+ b.append(el('b',g.ids[index],'spell-number'),img(arts[index]),el('strong',name));
+ b.disabled=g.turn!==room.you||index+1<g.minimum||g.phase!=='playing';
+ b.setAttribute('aria-haspopup','dialog');
+ b.setAttribute('aria-controls','spell-preview');
+ b.setAttribute('aria-expanded','false');
+ b.onpointerenter=event=>{if(event.pointerType==='mouse')openSpellPreview(b,g,index)};
+ b.onpointerleave=event=>{if(event.pointerType==='mouse'&&spellAnchor===b&&!spellPreview.contains(event.relatedTarget))dismissSpellPreviewSoon()};
+ b.onclick=event=>{
+  const mouse=event.pointerType==='mouse'||(!event.pointerType&&event.detail>0&&matchMedia('(hover: hover) and (pointer: fine)').matches);
+  openSpellPreview(b,g,index);
+  if(spellAnchor!==b)return;
+  if(mouse)castPreviewedSpell();
+  else if(event.detail===0)$('spell-preview-cast').focus();
+ };
+ return b;
+}
+
 let presentationChain=Promise.resolve(),presentationActive=false,presentationGame='',presentationThrough=0,presentationEpoch=0,scheduledSnapshot='',rollWaiter=null,rollDrawing=null,pendingRollPresentation='',latestRoomSnapshot=null;
 function cancelPresentation(){
  presentationEpoch++;
@@ -327,7 +423,7 @@ function renderNow(next){const callout=$('cast-stage');if(callout?.hidden&&callo
 const g=room.game,own=g.players.find(p=>p.id===room.you);const tabletKey=currentTabletKey();if(knownTabletKey!==tabletKey){knownTabletKey=tabletKey;knownTablets=[];tabletRequest=null;}if(own.tablets>knownTablets.length)loadKnownTablets({background:true}).catch(()=>{});const by=id=>g.players.find(p=>p.id===id)?.name||'';if(gameID!==g.id){gameID=g.id;last=Math.max(0,...g.events.map(e=>e.id))}const ended=['round-end','finished'].includes(g.phase);$('round-label').textContent='第 '+g.round+' 轮';$('mode-label').textContent=g.players.length===6?'六人扩展':'标准玩法';$('turn-label').textContent=ended?'本轮结束':by(g.turn)+(g.turn===room.you?' · 轮到你':'');$('neighbors').textContent='你的左邻：'+by(own.left)+' · 右邻／下家：'+by(own.right);
 $('score-strip').replaceChildren(...g.players.map(p=>{const score=el('div',undefined,'score-entry'+(p.id===room.you?' is-you':''));score.append(el('span',p.name),el('strong',p.score),el('span','/ 8','score-goal'));return score}));
 renderSeats(g,by);if(!$('emoji-menu').hidden)positionEmojiMenu();
- $('action-panel').hidden=ended||g.turn!==room.you||g.phase==='rolling';$('action-title').textContent=g.turn===room.you?'选择你的法术':'等待 '+by(g.turn);$('action-help').textContent=g.canEnd?'可以继续施法，编号不能降低，也可以收手补牌。':'每回合至少尝试一次施法。';$('end-turn').disabled=g.turn!==room.you||!g.canEnd||g.phase!=='playing';$('spell-buttons').hidden=g.phase==='owl';$('spell-buttons').replaceChildren(...names.map((n,i)=>{const b=el('button',undefined,'spell-'+(i+1));b.append(el('b',g.ids[i],'spell-number'),img(arts[i]),el('strong',n));b.title=effects[i];b.disabled=g.turn!==room.you||i+1<g.minimum||g.phase!=='playing';b.onclick=()=>confirm('施放 '+g.ids[i]+' 号'+n+'？',()=>act('cast',{spell:i+1}),'确认施法',effects[i]+(i===0?'；失败时自己失去骰子点数生命':'；失败时自己失去 1 点生命'));return b}));$('secret-choice').hidden=g.phase!=='owl'||g.turn!==room.you;$('secret-slots').replaceChildren(...g.secrets.map((available,i)=>{const b=el('button','石板 '+(i+1));b.disabled=!available||g.turn!==room.you;b.onclick=()=>openOwl();return b}));
+ $('action-panel').hidden=ended||g.turn!==room.you||g.phase==='rolling';$('action-title').textContent=g.turn===room.you?'选择你的法术':'等待 '+by(g.turn);$('action-help').textContent=g.canEnd?'可以继续施法，编号不能降低，也可以收手补牌。':'每回合至少尝试一次施法。';$('end-turn').disabled=g.turn!==room.you||!g.canEnd||g.phase!=='playing';$('spell-buttons').hidden=g.phase==='owl';closeSpellPreview();$('spell-buttons').replaceChildren(...names.map((name,index)=>spellButton(g,name,index)));$('secret-choice').hidden=g.phase!=='owl'||g.turn!==room.you;$('secret-slots').replaceChildren(...g.secrets.map((available,i)=>{const b=el('button','石板 '+(i+1));b.disabled=!available||g.turn!==room.you;b.onclick=()=>openOwl();return b}));
  $('deck-count').textContent='抽牌堆 '+g.deck;renderCountBoard(g);if(g.phase==='owl'&&g.turn===room.you&&owlKey!==g.id+':'+g.step){owlKey=g.id+':'+g.step;queueMicrotask(openOwl);}
 $('secret-count').textContent='中央剩余 '+g.secrets.filter(Boolean).length+' 个 · 你持有 '+own.tablets+' 个';$('round-result').hidden=!ended;$('result-title').textContent=g.phase==='finished'?'全场赢家：'+g.winners.map(by).join('、'):'本轮结束';$('round-result').querySelector('.eyebrow').textContent=g.phase==='finished'?'游戏结束':'本轮结算';$('result-reason').textContent=g.phase==='finished'?'最后一轮：'+g.reason:g.reason;const resultKey=g.id+':'+g.round+':'+g.phase;if(ended&&$('round-result').dataset.resultKey!==resultKey){$('round-result').dataset.resultKey=resultKey;$('round-result').classList.remove('collapsed');$('result-toggle').textContent='收起结算';$('result-toggle').setAttribute('aria-expanded','true');}$('scoreboard').replaceChildren(...g.players.map(p=>el('div',p.name+' · 本轮 +'+p.gain+' · 累计 '+p.score+' 分')));$('next-round').textContent=g.phase==='finished'?'重新开局':'下一轮';$('next-round').hidden=room.you!==room.host;$('next-wait').textContent=room.you===room.host?'':'等待房主继续';$('history').replaceChildren(...g.events.slice().reverse().map(e=>el('li','第 '+e.round+' 轮 · '+e.text)));
 for(const e of g.events){if(e.id<=last)continue;last=e.id;if(e.kind==='cast')animateCast(e)}}
@@ -617,17 +713,19 @@ function healHit(target,amount){
 }
 
 const emojiSendInterval=500;
-let emojiCatalog=null,emojiLoading=null,recentEmoji=[],lastEmojiSend=-Infinity;
+let emojiCatalog=null,emojiLoading=null,recentEmoji=[],lastEmojiSend=-Infinity,emojiCloseTimer;
 try{const saved=JSON.parse(localStorage.getItem('abr-emoji-recent')||'[]');if(Array.isArray(saved))recentEmoji=[...new Set(saved.filter(x=>typeof x==='string'))].slice(0,10)}catch{}
-async function toggleEmojiMenu(){
- if(!$('emoji-menu').hidden){closeEmojiMenu();return}
+async function openEmojiMenu(){
+ clearTimeout(emojiCloseTimer);
+ if(!$('emoji-menu').hidden)return;
+ closeSpellPreview();
  $('emoji-menu').hidden=false;document.querySelector('.emoji-toggle')?.setAttribute('aria-expanded','true');positionEmojiMenu();
  try{
-  if(!emojiCatalog){emojiLoading??=api('emojis');emojiCatalog=await emojiLoading;const allowed=new Set(emojiCatalog.flatMap(g=>g.emojis));recentEmoji=recentEmoji.filter(e=>allowed.has(e));}
+  if(!emojiCatalog){emojiLoading??=api('emojis',undefined,{background:true});emojiCatalog=await emojiLoading;const allowed=new Set(emojiCatalog.flatMap(g=>g.emojis));recentEmoji=recentEmoji.filter(e=>allowed.has(e));}
   if($('emoji-menu').hidden)return;drawEmojiMenu();positionEmojiMenu();
  }catch(error){emojiLoading=null;message(error.message);closeEmojiMenu()}
 }
-function closeEmojiMenu(){$('emoji-menu').hidden=true;document.querySelector('.emoji-toggle')?.setAttribute('aria-expanded','false')}
+function closeEmojiMenu(){clearTimeout(emojiCloseTimer);$('emoji-menu').hidden=true;document.querySelector('.emoji-toggle')?.setAttribute('aria-expanded','false')}
 function emojiButton(emoji,quick=false){const b=el('button',emoji,'emoji-choice');b.type='button';b.setAttribute('aria-label','发送 '+emoji);b.onclick=()=>sendEmoji(emoji,quick);return b}
 function drawQuickEmoji(){
  const row=document.querySelector('.emoji-quick');if(!row)return;
@@ -647,13 +745,26 @@ async function sendEmoji(emoji,quick=false){
  const activeCode=room.code;
  try{await api('react',{code:activeCode,emoji},{background:true});if(room?.code!==activeCode)return;recentEmoji=[emoji,...recentEmoji.filter(e=>e!==emoji)].slice(0,10);try{localStorage.setItem('abr-emoji-recent',JSON.stringify(recentEmoji))}catch{}if(!quick)drawQuickEmoji();}catch(error){message(error.message)}
 }
+function dismissEmojiMenuSoon(){
+ clearTimeout(emojiCloseTimer);
+ emojiCloseTimer=setTimeout(()=>{if(!$('emoji-menu').contains(document.activeElement))closeEmojiMenu()},240);
+}
 function positionEmojiMenu(){
- if($('emoji-menu').hidden)return;
- const button=document.querySelector('.emoji-toggle');if(!button){closeEmojiMenu();return}
- const menu=$('emoji-menu'),r=button.getBoundingClientRect(),height=Math.min(430,innerHeight-32),width=Math.min(330,innerWidth-24);
- menu.style.width=width+'px';menu.style.maxHeight=height+'px';
- menu.style.left=Math.max(12,Math.min(innerWidth-width-12,r.right-width))+'px';
- menu.style.top=Math.max(16,Math.min(innerHeight-height-16,r.top-height-10))+'px';
+ const menu=$('emoji-menu');
+ if(menu.hidden)return;
+ const button=document.querySelector('.emoji-toggle');
+ if(!button||!placePanel(menu,button,{width:330,maxHeight:430,align:'end'}))closeEmojiMenu();
+}
+function bindEmojiToggle(button){
+ button.setAttribute('aria-controls','emoji-menu');
+ button.onpointerenter=event=>{if(event.pointerType==='mouse')void openEmojiMenu()};
+ button.onpointerleave=event=>{if(event.pointerType==='mouse'&&!$('emoji-menu').contains(event.relatedTarget))dismissEmojiMenuSoon()};
+ button.onclick=event=>{
+  const mouse=event.pointerType==='mouse'||(!event.pointerType&&event.detail>0&&matchMedia('(hover: hover) and (pointer: fine)').matches);
+  if(!mouse&&!$('emoji-menu').hidden){closeEmojiMenu();return}
+  void openEmojiMenu();
+  if(event.detail===0&&!$('emoji-menu').hidden)$('emoji-close').focus();
+ };
 }
 function showReaction(value){
  if(!room?.game||!room.game.players.some(p=>p.id===value.player))return;
@@ -665,10 +776,23 @@ function showReaction(value){
  const animation=emoji.animate(reduced?[{opacity:1},{opacity:1,offset:.7},{opacity:0}]:[{opacity:0,transform:'translate(-50%,0) scale(.7)'},{opacity:1,transform:'translate(-50%,-12px) scale(1)',offset:.08},{opacity:1,transform:'translate(-50%,-95px)',offset:.7},{opacity:0,transform:'translate(-50%,-160px)'}],{duration:5000,easing:'linear'});
  animation.onfinish=()=>emoji.remove();
 }
-$('emoji-close').onclick=closeEmojiMenu;
+$('emoji-menu').addEventListener('pointerenter',()=>clearTimeout(emojiCloseTimer));
+$('emoji-menu').addEventListener('pointerleave',event=>{
+ if(event.pointerType==='mouse'&&!event.relatedTarget?.closest?.('.emoji-toggle'))dismissEmojiMenuSoon();
+});
+$('emoji-close').onclick=()=>{closeEmojiMenu();document.querySelector('.emoji-toggle')?.focus()};
 document.addEventListener('pointerdown',event=>{if(!$('emoji-menu').hidden&&!$('emoji-menu').contains(event.target)&&!event.target.closest('.emoji-controls'))closeEmojiMenu()});
-document.addEventListener('keydown',event=>{if(event.key==='Escape')closeEmojiMenu()});
-window.addEventListener('resize',positionEmojiMenu);window.addEventListener('scroll',positionEmojiMenu,{passive:true});
+document.addEventListener('keydown',event=>{
+ if(event.key!=='Escape'||$('emoji-menu').hidden)return;
+ const restore=$('emoji-menu').contains(document.activeElement);
+ closeEmojiMenu();
+ if(restore)document.querySelector('.emoji-toggle')?.focus();
+});
+function positionActionPanels(){positionEmojiMenu();positionSpellPreview()}
+window.addEventListener('resize',positionActionPanels);
+window.addEventListener('scroll',event=>{
+ if(event.target!==$('emoji-menu')&&event.target!==spellPreview)positionActionPanels();
+},{passive:true,capture:true});
 
 function positionCastCallout(){
  const stage=$('cast-stage');if(stage.hidden)return;
@@ -691,7 +815,7 @@ function renderSeats(g,by){
   if(!card){
    card=el('article');card.dataset.player=p.id;
    const content=el('div',undefined,'seat-content');content.append(el('h3'),el('div',undefined,'life'),el('div',undefined,'hand'));card.append(content);
-   if(p.id===room.you){const controls=el('div',undefined,'emoji-controls'),quick=el('div',undefined,'emoji-quick');quick.setAttribute('aria-label','快捷表情');const button=el('button','☺︎','emoji-toggle');button.type='button';button.setAttribute('aria-label','发送表情');button.onclick=toggleEmojiMenu;controls.append(quick,button);card.append(controls);quick.append(...[...new Set([...recentEmoji,'😂','🤣','😭','🤡','👍'])].slice(0,5).map(emoji=>emojiButton(emoji,true)))}
+   if(p.id===room.you){const controls=el('div',undefined,'emoji-controls'),quick=el('div',undefined,'emoji-quick');quick.setAttribute('aria-label','快捷表情');const button=el('button','☺︎','emoji-toggle');button.type='button';button.setAttribute('aria-label','发送表情');bindEmojiToggle(button);controls.append(quick,button);card.append(controls);quick.append(...[...new Set([...recentEmoji,'😂','🤣','😭','🤡','👍'])].slice(0,5).map(emoji=>emojiButton(emoji,true)))}
   }
   existing.delete(p.id);
   card.className='seat '+(s.offset===0?'self ':s.side==='opposite'?'opposite ':'')+(p.id===g.turn&&!['round-end','finished'].includes(g.phase)?'active':'');

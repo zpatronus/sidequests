@@ -15,3 +15,17 @@ export function seats(players,you){
 
 // Sort a copy: unknown own stones remain unknown; the server hand is untouched.
 export function sortedHand(hand){return [...hand].sort((a,b)=>a-b)}
+
+// Prefer a side with enough room, then use the side with more usable space.
+export function anchoredPanel(anchor,width,height,viewportWidth,viewportHeight,{align='center',gap=6,margin=12}={}){
+ const above=anchor.top-gap-margin,below=viewportHeight-anchor.bottom-gap-margin;
+ const opensAbove=above>=height||(below<height&&above>below);
+ const maxHeight=Math.max(0,opensAbove?above:below);
+ const panelHeight=Math.min(height,maxHeight);
+ const x=align==='end'?anchor.right-width:(anchor.left+anchor.right-width)/2;
+ return {
+  left:Math.max(margin,Math.min(viewportWidth-width-margin,x)),
+  top:opensAbove?anchor.top-gap-panelHeight:anchor.bottom+gap,
+  maxHeight,
+ };
+}
