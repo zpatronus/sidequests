@@ -303,6 +303,11 @@ func (g *game) finishIfNeeded() bool {
 	}
 	if len(contenders) > 0 {
 		g.Phase = "finished"
+		g.log(event{Kind: "victory", Text: "有人抵达 8 分高塔，游戏结束"})
+		if winner >= 0 && g.Players[winner].Score >= 8 {
+			g.Winners = append(g.Winners, g.Players[winner].Member.ID)
+			return true
+		}
 		best := contenders[0]
 		for _, i := range contenders {
 			if g.Players[i].Gain > g.Players[best].Gain || (g.Players[i].Gain == g.Players[best].Gain && g.Players[i].Life > g.Players[best].Life) {
@@ -314,7 +319,6 @@ func (g *game) finishIfNeeded() bool {
 				g.Winners = append(g.Winners, g.Players[i].Member.ID)
 			}
 		}
-		g.log(event{Kind: "victory", Text: "有人抵达 8 分高塔，游戏结束"})
 	}
 	return true
 }

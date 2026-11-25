@@ -234,3 +234,17 @@ func TestNextRoundStartsWithThePlayerWhoEndedTheRound(t *testing.T) {
 		})
 	}
 }
+
+func TestFinalRoundWinnerTakesPriority(t *testing.T) {
+	g := fixture(t, 3)
+	g.Turn = 0
+	g.Players[0].Score, g.Players[0].Life = 6, 3
+	g.Players[1].Score, g.Players[1].Life = 6, 4
+	g.Players[1].Tablets = []int{1, 2}
+	g.Players[2].Life = 0
+
+	g.finishIfNeeded()
+	if g.Phase != "finished" || len(g.Winners) != 1 || g.Winners[0] != g.Players[0].Member.ID {
+		t.Fatalf("expected final-round winner to win the match, got %v", g.Winners)
+	}
+}
