@@ -44,6 +44,7 @@ const formats = {
   goVersion: String,
   heapBytes: bytes => (bytes / 1048576).toFixed(1) + ' MiB',
   goroutines: String,
+  databaseBytes: dataSize,
   receiveRate: bytes => dataSize(bytes) + '/s',
   sendRate: bytes => dataSize(bytes) + '/s',
   received: dataSize,
@@ -113,6 +114,7 @@ async function refresh() {
     if (!Number.isFinite(timestamp.getTime())) throw new Error('Invalid sample');
     const readings = {
       ...sample,
+      databaseBytes: sample.database?.bytes,
       os: sample.osRelease || sample.os,
       receiveRate: sample.network?.rate?.received,
       sendRate: sample.network?.rate?.sent,
@@ -123,6 +125,7 @@ async function refresh() {
       const value = readings[id];
       document.getElementById(id).textContent = value == null || value === '' ? 'Unavailable' : format(value);
     }
+    document.getElementById('database').hidden = sample.database == null;
     renderInterfaces(sample.interfaces, sample.addressesIncluded);
     lastSample = timestamp;
     if (!updated.textContent || failing) statusMessage.textContent = 'Refreshes every 5 seconds';

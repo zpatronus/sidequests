@@ -30,7 +30,7 @@ func TestCollectReturnsAvailableMetrics(t *testing.T) {
 
 func TestDashboardRoutes(t *testing.T) {
 	mux := http.NewServeMux()
-	Register(mux)
+	Register(mux, nil)
 	for path, contentType := range map[string]string{
 		"/dashboard":               "text/html",
 		"/dashboard/dashboard.css": "text/css",
@@ -104,7 +104,7 @@ func TestNetworkRatesAndCounterReset(t *testing.T) {
 func TestInterfaceAddressesRequireDashboardPassword(t *testing.T) {
 	for _, password := range []string{"", "test-password"} {
 		mux := http.NewServeMux()
-		register(mux, password)
+		register(mux, password, nil)
 		for _, path := range []string{"/dashboard", "/dashboard/metrics"} {
 			request := httptest.NewRequest(http.MethodGet, path, nil)
 			if password != "" {

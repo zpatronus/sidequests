@@ -231,3 +231,35 @@ func TestRoomAuthenticationDoesNotUseBrowserCookies(t *testing.T) {
 		})
 	}
 }
+
+func TestDashboardDatabaseSizeFollowsStorageMode(t *testing.T) {
+	t.Setenv("DASHBOARD_PASSWORD", "")
+	dir := t.TempDir()
+	for _, mode := range []string{"", "memory"} {
+		t.Setenv("SIDEQUESTS_STORAGE", mode)
+		ctx, cancel := context.WithCancel(context.Background())
+		t.Cleanup(cancel)
+		app, db, err := openGameHandler(ctx, dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if db != nil {
+			t.Cleanup(func() { cancel(); db.Close() })
+		}
+		w := httptest.NewRecorder()
+		app.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/dashboard/metrics", nil))
+		var metrics struct {
+			Database *struct{ Bytes int64 }
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &metrics); err != nil {
+			t.Fatal(err)
+		}
+		if mode == "memory" {
+			if metrics.Database != nil {
+				t.Fatal("memory mode reported a database size")
+			}
+		} else if metrics.Database == nil || metrics.Database.Bytes <= 0 {
+			t.Fatal("SQLite mode did not report a database size")
+		}
+	}
+}

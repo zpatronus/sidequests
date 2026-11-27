@@ -27,7 +27,12 @@ type systemMemory struct {
 	AvailableKiB uint64 `json:"availableKiB"`
 }
 
+type databaseSample struct {
+	Bytes *int64 `json:"bytes"`
+}
+
 type snapshot struct {
+	Database          *databaseSample    `json:"database,omitempty"`
 	Interfaces        []interfaceDetails `json:"interfaces"`
 	AddressesIncluded bool               `json:"addressesIncluded"`
 	SampledAt         time.Time          `json:"sampledAt"`
@@ -51,11 +56,11 @@ type snapshot struct {
 	Goroutines        int           `json:"goroutines"`
 }
 
-func Register(mux *http.ServeMux) {
-	register(mux, os.Getenv("DASHBOARD_PASSWORD"))
+func Register(mux *http.ServeMux, databaseSize func() (int64, error)) {
+	register(mux, os.Getenv("DASHBOARD_PASSWORD"), databaseSize)
 }
 
-func register(mux *http.ServeMux, password string) {
+func register(mux *http.ServeMux, password string, databaseSize func() (int64, error)) {
 	credentials := sha256.Sum256([]byte(password))
 	protect := func(next http.HandlerFunc) http.HandlerFunc {
 		return dashboardHeaders(func(w http.ResponseWriter, r *http.Request) {
@@ -88,6 +93,12 @@ func register(mux *http.ServeMux, password string) {
 		mu.Lock()
 		if time.Since(latest.SampledAt) >= 5*time.Second {
 			next := collect("/proc")
+			if databaseSize != nil {
+				next.Database = &databaseSample{}
+				if size, err := databaseSize(); err == nil {
+					next.Database.Bytes = &size
+				}
+			}
 			next.CPUModel, next.OSRelease, next.Kernel = cpuModel, osRelease, kernel
 			next.ProcessCPU = cpuPercent(latest, next)
 			next.Network = measureNetwork(latest.network, next.network, next.SampledAt.Sub(latest.SampledAt))

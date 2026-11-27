@@ -21,6 +21,7 @@ var ErrInUse = errors.New("room database already in use")
 type Store struct {
 	db   *sql.DB
 	lock *os.File
+	path string
 }
 
 func Open(path string) (*Store, error) {
@@ -61,7 +62,7 @@ func Open(path string) (*Store, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	store := &Store{db: db, lock: lock}
+	store := &Store{db: db, lock: lock, path: path}
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS room_snapshots (
   game TEXT NOT NULL,
   code TEXT NOT NULL,
@@ -74,6 +75,22 @@ func Open(path string) (*Store, error) {
 		return nil, err
 	}
 	return store, nil
+}
+
+// SizeBytes reports the combined size of the SQLite database and its write-ahead log.
+func (s *Store) SizeBytes() (int64, error) {
+	main, err := os.Stat(s.path)
+	if err != nil {
+		return 0, err
+	}
+	wal, err := os.Stat(s.path + "-wal")
+	if errors.Is(err, os.ErrNotExist) {
+		return main.Size(), nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	return main.Size() + wal.Size(), nil
 }
 
 func (s *Store) Close() error {

@@ -28,7 +28,7 @@ import (
 var web embed.FS
 
 func handler() http.Handler {
-	return mountGames(nil, nil)
+	return mountGames(nil, nil, nil)
 }
 
 func persistentHandler(ctx context.Context, db *roomdb.Store) (http.Handler, error) {
@@ -40,12 +40,12 @@ func persistentHandler(ctx context.Context, db *roomdb.Store) (http.Handler, err
 	if err != nil {
 		return nil, err
 	}
-	return mountGames(magic, hitler), nil
+	return mountGames(magic, hitler, db.SizeBytes), nil
 }
 
-func mountGames(magic, hitler http.Handler) http.Handler {
+func mountGames(magic, hitler http.Handler, databaseSize func() (int64, error)) http.Handler {
 	mux := http.NewServeMux()
-	dashboard.Register(mux)
+	dashboard.Register(mux, databaseSize)
 	roomAuth := identity.New()
 	if magic == nil {
 		magic = roomAuth.Wrap("abracada", "abr_", abracada.Handler())
@@ -90,7 +90,7 @@ func mountGames(magic, hitler http.Handler) http.Handler {
 
 func openGameHandler(ctx context.Context, dataDir string) (http.Handler, *roomdb.Store, error) {
 	memoryHandler := func() http.Handler {
-		return mountGames(abracada.MemoryHandler(ctx), secrethitler.MemoryHandler(ctx))
+		return mountGames(abracada.MemoryHandler(ctx), secrethitler.MemoryHandler(ctx), nil)
 	}
 	if os.Getenv("SIDEQUESTS_STORAGE") == "memory" {
 		return memoryHandler(), nil, nil
